@@ -1,0 +1,65 @@
+# Issue workflow configuration (gh-wf: the plan-work and work-issue skills).
+# Everything repository-specific lives here. The script reads this file from the
+# worktree being checked, so a branch's own checks decide whether it passes.
+
+[repo]
+base_branch = "main"
+remote = "origin"
+
+[paths]
+worktrees = ".worktrees"     # gitignored; one worktree per issue or plan
+plans = "docs/plans"         # plan documents that become feature issues
+work_plans = "docs/work"     # one work plan per issue, committed with the change
+
+[labels]
+feature = "feature"          # issues created from a plan
+bug = "bug"
+plan = "plan"                # tracking issue for a plan
+spec = "spec"                # decisions to fold back into specs; ship files one per PR
+pick_order = ["bug", "feature"]   # which ready issues `next` offers first
+
+[knowledge]
+# Files the agent must read before planning or working an issue.
+read = ["README.md", "docs/specs/agent-loop-excerpts.md"]
+# Guidance that is not written down anywhere else in the repository.
+notes = """
+- agent-loop specs win. The handler contract is defined by mayusuk/agent-loop specs/INTEGRATION-SPEC.md §2–§5 and §12.4, PRODUCT-SPEC FR-18, D34, D38 and TECHNICAL-SPEC T7, §7.1–§7.3. docs/specs/agent-loop-excerpts.md is a vendored copy; if it disagrees with agent-loop's main, agent-loop is right and the copy is stale. Never change contract behaviour here: file a spec issue on mayusuk/agent-loop instead.
+- Use github.com/mayusuk/agent-loop/contract for the types, schemas and ValidateResult. Do not copy or re-implement them.
+- Go 1.25, one module (github.com/mayusuk/agent-loop-handlers). One binary, cmd/agent-loop-claude.
+- Tests never call the real `claude` CLI, the Anthropic API or GitHub: they use the fake claude binary. Tests that need real services are skipped unless AGENT_LOOP_LIVE=1.
+- Handlers never post to GitHub themselves (INTEGRATION-SPEC I1, I2): they return content in result.json and push code only.
+- Name tests after the requirement they prove where one applies, e.g. TestFR18AC3_..., TestI12_4_... .
+- Run gofmt; CI fails on unformatted files.
+"""
+
+# Checks run in order from the worktree root, without a shell. They gate the
+# base branch before a work branch is created, and the branch before it is pushed.
+# Mirror CI. `env` adds environment variables. `when_exists` reports the step as
+# NOT AVAILABLE (never a silent pass) while that path is missing.
+[[verify]]
+name = "gofmt"
+run = "sh -c 'test -z \"$(gofmt -l .)\" || { gofmt -l .; exit 1; }'"
+when_exists = "go.mod"
+
+[[verify]]
+name = "vet"
+run = "go vet ./..."
+when_exists = "go.mod"
+
+[[verify]]
+name = "build"
+run = "go build ./..."
+when_exists = "go.mod"
+
+[[verify]]
+name = "tests"
+run = "go test -race -count=1 ./..."
+when_exists = "go.mod"
+
+# Optional: work plans list criteria under "## Acceptance criteria". Each match of
+# ref_pattern must have a test whose name starts with test_prefix, formatted with
+# the pattern's groups and lowercased.
+# [acceptance]
+# ref_pattern = '\b(FR)-(\d+)\s+AC(\d+)\b'
+# test_prefix = "test_{0}{1}_ac{2}_"
+# test_glob = "tests/**/*.py"
