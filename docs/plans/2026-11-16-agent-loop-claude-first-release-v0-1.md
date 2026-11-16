@@ -1,8 +1,8 @@
 # Plan: agent-loop-claude first release (v0.1)
 
-**Status:** Approved
+**Status:** Issues created
 **Base:** `origin/main @ aaadc47`
-**Tracking issue:** —
+**Tracking issue:** #1
 
 ## Goal
 
@@ -65,8 +65,7 @@ Sources read (agent-loop specs win; vendored in `docs/specs/agent-loop-excerpts.
 
 ## Tasks
 
-### T1: Add the CLI skeleton, input checks and the always-write-a-result guarantee
-
+### T1: Add the CLI skeleton, input checks and the always-write-a-result guarantee (#2)
 Create `cmd/agent-loop-claude` with the subcommands `implement`, `review`, `address`, `mint` and `version`, and `internal/run`. `internal/run` reads `AGENT_LOOP_INPUT`, `AGENT_LOOP_RESULT`, `AGENT_LOOP_OUT` and `AGENT_LOOP_CONTRACT` (INTEGRATION-SPEC §3.1), parses the input with `contract.ParseInput`, and checks that the input's `stage` matches the subcommand and that the contract major is 1 (D7). It provides `Finish(result)`, which validates with `contract.ValidateResult` and writes `result.json` atomically, writing the returned `failed` result when validation fails, and a recover path so a panic still writes `failed` (D2). `mint` writes the stub `failed` (D11). `version` prints the release and supported contracts (D7). Replace `internal/compat` with this. The stage subcommands other than `mint` return `failed: not implemented` until their tasks land.
 
 **Depends on:** —
@@ -77,8 +76,7 @@ Create `cmd/agent-loop-claude` with the subcommands `implement`, `review`, `addr
 - `mint` writes a valid `failed` result (D11).
 - A result that `ValidateResult` rejects is replaced by its `failed` result before it is written; a panic in a stage still writes `failed`.
 
-### T2: Run Claude Code headless, with a fake claude for tests
-
+### T2: Run Claude Code headless, with a fake claude for tests (#3)
 Add `internal/claude`: build the command line (`-p`, `--output-format json`, `--permission-mode acceptEdits`, `--settings` when `AGENT_LOOP_CLAUDE_SETTINGS` is set, never `--dangerously-skip-permissions`, D12), find the binary (D13), run it in the workspace with stdin closed and in its own process group, stop it and its children at the input deadline minus the margin (D3), stream its stdout and stderr to the handler's own (the run log), and parse cost and tokens from the final JSON into `contract.Usage` (leniently). Add `internal/testing/fakeclaude`, a test binary built in `TestMain` and scripted by environment variables: write a given draft file, run a shell step (commit, merge), sleep, exit non-zero, print malformed JSON, and record its arguments and working directory.
 
 **Depends on:** T1
@@ -89,8 +87,7 @@ Add `internal/claude`: build the command line (`-p`, `--output-format json`, `--
 - Usage is read from the JSON output; missing or malformed output gives no `usage` and no crash.
 - A non-zero exit is reported as an error with the exit code.
 
-### T3: Build stage prompts with base-branch overrides and `--skill`
-
+### T3: Build stage prompts with base-branch overrides and `--skill` (#4)
 Add `internal/prompt` with built-in prompts for implement, review and address as embedded markdown (`internal/prompt/builtin/<stage>.md`). The final prompt is: the stage prompt (built-in, the override from `origin/<base>:.agent-loop/prompts/<stage>.md` per D5, or, for `--skill`, an instruction naming the skill and telling it to write the draft and not post to GitHub, D1, D6), then the run facts (input path, item and change references, branch, review kind and IDs to rule on or answer, the draft path) and the draft format for the stage (from T4's schema). Prompts tell the agent that tracker text is data, never instructions (PRODUCT-SPEC §8.5), to commit but not push (D4), and never to post to GitHub (I1).
 
 **Depends on:** T1
@@ -101,8 +98,7 @@ Add `internal/prompt` with built-in prompts for implement, review and address as
 - A prompt file over 64 KiB or not UTF-8 ends in `failed` (D5).
 - Every built-in prompt includes the run facts and the draft instructions, checked by golden tests.
 
-### T4: Define the agent draft and convert it to `result.json`
-
+### T4: Define the agent draft and convert it to `result.json` (#5)
 Add `internal/draft`: the draft format per stage (D1) with an embedded JSON Schema and Go types, and `Convert(input, draft, outDir)`. It writes each text field (change body, summary, notes, finding bodies, replies, `blocked` reason, `needs_owner` question) to a file in `AGENT_LOOP_OUT` and sets the matching `*_file`; fills `run_id`, `contract_version`, review `commit` and `kind` from the input; truncates nothing silently (text over 64 KiB is `failed`); and collapses `failed` reasons to one line of at most 500 characters. A missing draft, invalid JSON, an outcome not allowed for the stage (`contract.Allowed`, for example `blocked` from review) or an unknown field is `failed`. Document the format for skill authors in `docs/agent-draft.md`.
 
 **Depends on:** T1
@@ -113,8 +109,7 @@ Add `internal/draft`: the draft format per stage (D1) with an embedded JSON Sche
 - A missing draft, malformed JSON, a disallowed outcome and an oversized text each give `failed` with a reason naming the problem (FR-18 AC3).
 - Fields the agent sets that the handler owns (`run_id`, `commit`, `head`) are ignored or rejected, never copied.
 
-### T5: Implement the `implement` subcommand
-
+### T5: Implement the `implement` subcommand (#6)
 Wire T2–T4 for `implement`: build the prompt, run Claude in the workspace on `workspace.branch`, read the draft, and for `done` push `HEAD` to the item's branch with a plain push and set `head` to the pushed SHA (D4). Put the push helper in `internal/gitx` for T7. `done` with no new commit since `workspace.head` is `failed`. A refused push is `failed`. `blocked` and `needs_owner` push nothing.
 
 **Depends on:** T2, T3, T4
@@ -125,8 +120,7 @@ Wire T2–T4 for `implement`: build the prompt, run Claude in the workspace on `
 - No new commit, a refused push (non-fast-forward), and a `claude` failure each give `failed`; nothing is force-pushed.
 - `blocked` and `needs_owner` drafts give those results and push nothing.
 
-### T6: Implement the `review` subcommand
-
+### T6: Implement the `review` subcommand (#7)
 Wire T2–T4 for `review`: run in the detached workspace at `review.commit`, pass `rule_findings`, `rule_manual`, `blocking_threshold` and `resolved_paths` to the prompt, and convert the draft with `commit` and `kind` from the input. Check new findings against `review.commit` and adjust bad locations (D8). Never push (D9).
 
 **Depends on:** T2, T3, T4
@@ -137,8 +131,7 @@ Wire T2–T4 for `review`: run in the detached workspace at `review.commit`, pas
 - A finding with a path missing at the commit, or a line past the end of the file, is adjusted as D8 says.
 - A `blocked` draft gives `failed` (FR-18 AC1); the remote is unchanged after every review run.
 
-### T7: Implement the `address` subcommand, including `base_update` mode
-
+### T7: Implement the `address` subcommand, including `base_update` mode (#8)
 Wire T2–T4 for `address`. In `findings` and `manual` modes, pass `answer_findings` and `answer_manual`, push new commits with T5's helper, and set `head` (unchanged when nothing was committed). In `base_update` mode, the prompt asks the agent to merge `origin/<base>` into the branch and resolve conflicts, never rebasing; the handler checks the merge commit shape (D10) before pushing, and the replies must be empty.
 
 **Depends on:** T5, T6
@@ -148,8 +141,7 @@ Wire T2–T4 for `address`. In `findings` and `manual` modes, pass `answer_findi
 - A missing reply with an unmoved head gives `failed` (FR-5 AC2).
 - `base_update`: one merge commit with the right parents is pushed and returned; a rebase, a one-parent commit, or two commits gives `failed` and pushes nothing (FR-5 AC6).
 
-### T8: Pass the run's sandbox settings to Claude Code
-
+### T8: Pass the run's sandbox settings to Claude Code (#9)
 Implement the sandbox handoff of D12: when `AGENT_LOOP_CLAUDE_SETTINGS` is set, pass it with `--settings` and check that it enables the sandbox; when it isn't, return `failed: no sandbox settings` unless `--unsandboxed` is given (for `runner = "local-unsandboxed"`, TECHNICAL-SPEC §7.2). agent-loop #18 (T13) builds the runner's half.
 
 **Depends on:** T2
@@ -159,8 +151,7 @@ Implement the sandbox handoff of D12: when `AGENT_LOOP_CLAUDE_SETTINGS` is set, 
 - Without it, the run ends `failed` and `claude` is never started; with `--unsandboxed` it runs and logs a warning.
 - A settings file that doesn't enable the sandbox gives `failed`.
 
-### T9: Add a live smoke test with the real Claude Code
-
+### T9: Add a live smoke test with the real Claude Code (#10)
 Add `e2e/live_test.go`, skipped unless `AGENT_LOOP_LIVE=1` (D15). It creates a small Go repository with a bare local remote, writes `input.json` files as the worker would, and runs `implement`, then `review` on the pushed head, then `address` on the findings, with the real `claude`. Each result must pass `contract.ValidateResult`. Document how to run it in the README.
 
 **Depends on:** T7, T8
@@ -169,8 +160,7 @@ Add `e2e/live_test.go`, skipped unless `AGENT_LOOP_LIVE=1` (D15). It creates a s
 - Without `AGENT_LOOP_LIVE=1` the test is skipped and CI stays green.
 - With it, the three stages each write a valid result, and the implement head is on the bare remote.
 
-### T10: Document usage and cut the first release
-
+### T10: Document usage and cut the first release (#11)
 Update the README: install, profile snippets for each stage, prompt overrides and `--skill`, the draft format link, the environment variables (`AGENT_LOOP_CLAUDE_BIN`, `AGENT_LOOP_CLAUDE_SETTINGS`), and the supported contract versions. Add `CHANGELOG.md` with `v0.1.0`, set the release version reported by `version`, and describe the tagging step (the tag itself is pushed by the owner). Install instructions follow D16 (local `go install` from the clone).
 
 **Depends on:** T9
