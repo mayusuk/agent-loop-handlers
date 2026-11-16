@@ -1,0 +1,32 @@
+name: ci
+on:
+  pull_request:
+  push:
+    branches: [main]
+jobs:
+  test:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]   # agent-loop NFR-3 AC1
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check for Go module
+        id: mod
+        run: if [ -f go.mod ]; then echo "present=true" >> "$GITHUB_OUTPUT"; fi
+      - uses: actions/setup-go@v5
+        if: steps.mod.outputs.present == 'true'
+        with:
+          go-version-file: go.mod
+      - name: gofmt
+        if: steps.mod.outputs.present == 'true'
+        run: test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
+      - name: vet
+        if: steps.mod.outputs.present == 'true'
+        run: go vet ./...
+      - name: build
+        if: steps.mod.outputs.present == 'true'
+        run: go build ./...
+      - name: tests
+        if: steps.mod.outputs.present == 'true'
+        run: go test -race -count=1 ./...
