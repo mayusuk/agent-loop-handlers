@@ -1,6 +1,6 @@
 # Plan: agent-loop-claude first release (v0.1)
 
-**Status:** Draft
+**Status:** Approved
 **Base:** `origin/main @ aaadc47`
 **Tracking issue:** —
 
@@ -33,7 +33,7 @@ Sources read (agent-loop specs win; vendored in `docs/specs/agent-loop-excerpts.
 
 ## Decisions
 
-- **D1** [open] INTEGRATION-SPEC §12.4: the agent's output is a draft JSON file (`agent-draft.json`) at a path the handler passes in the prompt and in `AGENT_LOOP_CLAUDE_DRAFT`, outside `AGENT_LOOP_OUT`'s result files. It holds the outcome and inline text; the handler owns the conversion to `*_file` and every field it can derive itself. The same format is the result-only mode interface for skills. Why: the agent never has to get the contract's file rules, IDs or SHAs right, and skills and built-in prompts share one interface. Owner to confirm (question Q2).
+- **D1** [open] INTEGRATION-SPEC §12.4: the agent's output is a draft JSON file (`agent-draft.json`) that the agent writes at a path the handler passes in the prompt and in `AGENT_LOOP_CLAUDE_DRAFT`, outside the result files in `AGENT_LOOP_OUT`. It holds the outcome and inline text; the handler owns the conversion to `*_file` and every field it can derive itself. Coordinator ruling 2026-11-16 (Q2 option a). For v0.1 the built-in prompts are the default. Changing the owner's skills (`work-issue`, `review-pr`, `address-pr`) to add a result-only mode is out of scope; `--skill` still passes the skill's name and the draft-writing instructions in the prompt. Open: when and where the skills gain that mode.
 - **D2** [gap] §3.1, FR-18 AC3: the handler always tries to write a result. A missing or invalid draft, a `claude` failure, a timeout, a push failure or an internal error becomes `failed` with a one-line reason. The exit code is 0 when a result was written and non-zero only when none could be. Why: the worker treats a missing result as `failed` anyway, but a reason helps the owner.
 - **D3** [gap] §3.1, §4.1: `claude` is stopped at the input `deadline` minus a margin (default 2 minutes, `--deadline-margin`), so the handler can still write `failed: time limit reached` before the worker kills the process group (FR-18 AC4).
 - **D4** [gap] §5.2 implement and address: the agent commits but does not push. The handler pushes `HEAD` to the item's branch with a plain push (never `--force`) through the configured credential helper, and sets `head` to what it pushed. Why: `head` is then the remote head by construction, and force-push is impossible.
@@ -44,24 +44,23 @@ Sources read (agent-loop specs win; vendored in `docs/specs/agent-loop-excerpts.
 - **D9** [gap] §5.2 review: a review run whose workspace head moved, or that left uncommitted changes, still returns its review of `review.commit`; the handler never pushes in review, and it has no push token (§3.4).
 - **D10** [gap] §5.2 address `base_update`: the handler checks locally that the new head is exactly one merge commit whose first parent is the input head and whose second parent contains `change.base_tip`, before pushing. Anything else is `failed` and nothing is pushed.
 - **D11** [gap] FR-18 AC1: `mint` writes `failed` with reason `mint is not supported in this release (agent-loop v0.2)`. Why: the subcommand exists so a profile is valid, and `failed` is an allowed mint result.
-- **D12** [open] TECHNICAL-SPEC §7.2: the handler runs `claude` with `--permission-mode acceptEdits` and the run's sandbox settings, and never with `--dangerously-skip-permissions` under the `local` runner. How the runner hands over the sandbox settings is open (question Q1); the plan assumes a settings file path in `AGENT_LOOP_CLAUDE_SETTINGS`, passed as `--settings`.
+- **D12** [gap] TECHNICAL-SPEC §7.2: the `local` runner generates the sandbox settings for each run and sets `AGENT_LOOP_CLAUDE_SETTINGS` to the settings file; the handler passes it to `claude` with `--settings`, uses `--permission-mode acceptEdits`, and never `--dangerously-skip-permissions` under the `local` runner. Coordinator ruling 2026-11-16 (Q1 option a), noted on agent-loop #18 (T13).
 - **D13** [gap] TECHNICAL-SPEC T7: `claude` is found through `--claude <path>`, then `AGENT_LOOP_CLAUDE_BIN`, then `PATH`. Tests always use the fake binary through the environment variable.
 - **D14** [gap] INTEGRATION-SPEC §2: the `contract` dependency is pinned to a pseudo-version of agent-loop `main` until agent-loop tags a release; it is bumped in a PR when the contract changes. Why: agent-loop has no tags yet.
 - **D15** [gap] TECHNICAL-SPEC §14 style: a live smoke test with the real `claude` runs only when `AGENT_LOOP_LIVE=1`, against a local bare repository (no GitHub). Why: CI has no API key.
+- **D16** [open] INTEGRATION-SPEC §12.4: for v0.1 the repository stays private and the owner builds the handler locally (`go install ./cmd/agent-loop-claude` from the clone). Coordinator ruling 2026-11-16 (Q3 option b). Making it public is the owner's call at release.
 
 ## Out of scope
 
 - `mint` beyond the stub (agent-loop v0.2), and the Docker runner.
-- Changing the first adopter's skills (`work-issue`, `review-pr`, `address-pr`) to add their result-only mode: they live outside this repository (question Q2).
+- Changing the owner's skills (`work-issue`, `review-pr`, `address-pr`) to add their result-only mode (D1).
 - Generating the sandbox settings: TECHNICAL-SPEC §7.2 gives that to agent-loop's `local` runner.
 - Reading tracker text: the agent reads the item and change itself with `gh` and `GH_TOKEN`, as data (§4.1).
-- Packaging beyond `go install` and a tagged release (question Q3).
+- Packaging beyond a local `go install` from the clone (D16).
 
 ## Risks and open questions
 
-- **Q1 (owner, agent-loop spec gap): sandbox handoff.** TECHNICAL-SPEC §7.2 says the runner generates Claude sandbox settings per run, and that `validate` fails for a handler "the Claude sandbox doesn't wrap", but not how either is done. Options: (a) the runner writes a Claude settings file and sets `AGENT_LOOP_CLAUDE_SETTINGS`; `agent-loop-claude` passes it with `--settings` and returns `failed` without it unless `--unsandboxed` is given (plan default, T8); (b) the runner wraps the whole handler process in an OS sandbox itself (`sandbox-exec` / `bwrap`), and the handler does nothing; (c) the handler builds the sandbox settings itself from the egress list the runner passes in the environment. Whichever is chosen belongs in an agent-loop spec issue.
-- **Q2 (owner): result-only mode for skills.** Options: (a) the draft file of D1, which the skills write and the handler converts (plan default); (b) Claude's structured output (`--json-schema`), with the handler reading the final JSON message, so skills need only a mode flag; (c) skills write a contract `result.json` themselves and the handler only validates. Also: who changes the skills, and where (they are not in this repository)?
-- **Q3 (owner): distribution.** This repository is private, so adopters can't `go install` it. Options: (a) make it public at the first release; (b) keep it private for v0.1, with only the owner installing via `GOPRIVATE` and `gh` auth; (c) publish prebuilt binaries as release assets (still needs access while private).
+- Q1–Q3 were resolved by the coordinator on 2026-11-16 (D1, D12, D16).
 - Claude Code's `--output-format json` fields (`total_cost_usd`, `usage`) may change between versions; T2 parses them leniently and omits `usage` when absent.
 
 ## Tasks
@@ -151,7 +150,7 @@ Wire T2–T4 for `address`. In `findings` and `manual` modes, pass `answer_findi
 
 ### T8: Pass the run's sandbox settings to Claude Code
 
-Implement the sandbox handoff chosen for Q1. Under the plan default (Q1 option a): when `AGENT_LOOP_CLAUDE_SETTINGS` is set, pass it with `--settings` and check that it enables the sandbox; when it isn't, return `failed: no sandbox settings` unless `--unsandboxed` is given (for `runner = "local-unsandboxed"`, TECHNICAL-SPEC §7.2). File an agent-loop `spec` issue recording the handoff so agent-loop's runner task builds the other half.
+Implement the sandbox handoff of D12: when `AGENT_LOOP_CLAUDE_SETTINGS` is set, pass it with `--settings` and check that it enables the sandbox; when it isn't, return `failed: no sandbox settings` unless `--unsandboxed` is given (for `runner = "local-unsandboxed"`, TECHNICAL-SPEC §7.2). agent-loop #18 (T13) builds the runner's half.
 
 **Depends on:** T2
 
@@ -172,7 +171,7 @@ Add `e2e/live_test.go`, skipped unless `AGENT_LOOP_LIVE=1` (D15). It creates a s
 
 ### T10: Document usage and cut the first release
 
-Update the README: install, profile snippets for each stage, prompt overrides and `--skill`, the draft format link, the environment variables (`AGENT_LOOP_CLAUDE_BIN`, `AGENT_LOOP_CLAUDE_SETTINGS`), and the supported contract versions. Add `CHANGELOG.md` with `v0.1.0`, set the release version reported by `version`, and describe the tagging step (the tag itself is pushed by the owner). Apply the Q3 decision on distribution.
+Update the README: install, profile snippets for each stage, prompt overrides and `--skill`, the draft format link, the environment variables (`AGENT_LOOP_CLAUDE_BIN`, `AGENT_LOOP_CLAUDE_SETTINGS`), and the supported contract versions. Add `CHANGELOG.md` with `v0.1.0`, set the release version reported by `version`, and describe the tagging step (the tag itself is pushed by the owner). Install instructions follow D16 (local `go install` from the clone).
 
 **Depends on:** T9
 
