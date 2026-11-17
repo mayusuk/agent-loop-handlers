@@ -62,6 +62,8 @@ type fixture struct {
 	remote string
 	ws     string
 	head   string
+	// baseTip is the base tip a base-update fixture gives change.base_tip.
+	baseTip string
 	// flags are the stage's arguments; deadline, if set, replaces the
 	// input's hour-away deadline.
 	flags    prompt.Flags

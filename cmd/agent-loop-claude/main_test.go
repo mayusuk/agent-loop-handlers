@@ -96,18 +96,16 @@ func TestD11_MintWritesValidFailed(t *testing.T) {
 	}
 }
 
-func TestStageStubsWriteNotImplemented(t *testing.T) {
-	for _, s := range []string{"address"} {
-		t.Run(s, func(t *testing.T) {
-			e := env(t, s)
-			var stdout, stderr bytes.Buffer
-			if code := realMain([]string{s}, func(k string) string { return e[k] }, &stdout, &stderr); code != 0 {
-				t.Fatalf("exit = %d; stderr:\n%s", code, stderr.String())
-			}
-			if reason := readFailed(t, e, s); reason != "the "+s+" stage is not implemented in this release" {
-				t.Errorf("reason = %q", reason)
-			}
-		})
+// TestAddressIsRouted: address runs the stage, which checks its input
+// before anything else.
+func TestAddressIsRouted(t *testing.T) {
+	e := env(t, "address")
+	var stdout, stderr bytes.Buffer
+	if code := realMain([]string{"address"}, func(k string) string { return e[k] }, &stdout, &stderr); code != 0 {
+		t.Fatalf("exit = %d; stderr:\n%s", code, stderr.String())
+	}
+	if reason := readFailed(t, e, "address"); reason != "the input has no address object" {
+		t.Errorf("reason = %q", reason)
 	}
 }
 
@@ -139,7 +137,7 @@ func TestStageArgumentsAreFailed(t *testing.T) {
 }
 
 // TestD7_SkillFlagIsAccepted: --skill, --claude and --deadline-margin pass
-// the argument check, so the stub stage's own reason is the result (work
+// the argument check, so the stage's own input check is the result (work
 // plan #4 D7, plan D3, D13).
 func TestD7_SkillFlagIsAccepted(t *testing.T) {
 	for _, args := range [][]string{
@@ -150,7 +148,7 @@ func TestD7_SkillFlagIsAccepted(t *testing.T) {
 		e := env(t, "address")
 		var stdout, stderr bytes.Buffer
 		realMain(append([]string{"address"}, args...), func(k string) string { return e[k] }, &stdout, &stderr)
-		if reason := readFailed(t, e, "address"); reason != "the address stage is not implemented in this release" {
+		if reason := readFailed(t, e, "address"); reason != "the input has no address object" {
 			t.Errorf("args %q: reason = %q", args, reason)
 		}
 	}

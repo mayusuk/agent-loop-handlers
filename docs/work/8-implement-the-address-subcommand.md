@@ -26,7 +26,7 @@ Wire the runner, prompts and draft conversion into the `address` subcommand, as 
 ## Steps
 
 - [x] `gitx.Parents`, with a test.
-- [ ] `stage.Address` and the CLI wiring, with end-to-end tests using the fake claude and a bare remote.
+- [x] `stage.Address` and the CLI wiring, with end-to-end tests using the fake claude and a bare remote.
 
 ## Acceptance criteria
 
@@ -36,7 +36,10 @@ Wire the runner, prompts and draft conversion into the `address` subcommand, as 
 
 ## Decisions
 
-None yet.
+- **D1** [gap] §5.2 address, FR-5 AC2: in `findings` and `manual` modes the handler checks FR-5 AC2 itself before pushing: an unmoved head with a finding that has no reply gives `failed: the head did not move and <IDs> have no reply (FR-5 AC2)`, and a manual comment with no reply gives `failed: manual comments <IDs> have no reply (FR-5 AC2); nothing was pushed`, whether or not the head moved. A `deferred` reply counts whatever item it names; the worker checks the item is open (FR-5 AC5). Why: `ValidateResult` would fail the result anyway, but after the push; a failed run should not leave new commits on the branch.
+- **D2** [ambiguity] §5.2 address `base_update`, plan D10: "a base commit that contains `base_tip`" is read as: the merge's second parent has `change.base_tip` as an ancestor and is itself an ancestor of `origin/<base_branch>` in the workspace. An input with no `change` or no `change.base_tip` in `base_update` mode is `failed` before claude runs. Every shape failure ends with `; nothing was pushed`. Why: a merge of a side branch that contains the base tip would bring in commits that are not on the base.
+- **D3** [gap] §5.2 address `base_update`: a `done` draft with any reply is `failed: a base_update address run must not reply (FR-5 AC6); nothing was pushed`, before any text file is written. `blocked` and `needs_owner` are allowed in `base_update` mode, as in the other modes, and push nothing, whatever the agent committed. Why: FR-18 AC1 allows them from address and FR-5 AC6 does not exclude them.
+- **D4** [gap] §5.2 address: in `findings` and `manual` modes, a moved head must build on the input head (as in implement, #6); otherwise `failed: HEAD <sha> does not build on <sha>; nothing was pushed`. The workspace must be on `workspace.branch` at `workspace.head` before claude runs (#6 work plan D2). Uncommitted changes are logged and not pushed.
 
 ## Verification
 
