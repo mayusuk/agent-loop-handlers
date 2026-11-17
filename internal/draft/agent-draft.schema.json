@@ -103,7 +103,7 @@
                 "additionalProperties": false,
                 "properties": {
                   "score": { "type": "integer", "minimum": 1, "maximum": 5 },
-                  "path": { "type": ["string", "null"], "minLength": 1 },
+                  "path": { "$ref": "#/$defs/optional_text" },
                   "line": { "type": ["integer", "null"], "minimum": 1 },
                   "title": { "$ref": "#/$defs/line" },
                   "body": { "$ref": "#/$defs/text" }

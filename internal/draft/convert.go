@@ -113,7 +113,7 @@ func convertDone(in contract.Input, d *Done, w *texts) (*contract.Done, error) {
 		for i, f := range d.NewFindings {
 			rd.NewFindings = append(rd.NewFindings, contract.NewFinding{
 				Score:    f.Score,
-				Path:     f.Path,
+				Path:     given(f.Path),
 				Line:     f.Line,
 				Title:    f.Title,
 				BodyFile: w.add(fmt.Sprintf("finding-%d-body.md", i+1), fmt.Sprintf("done.new_findings[%d].body", i), f.Body),

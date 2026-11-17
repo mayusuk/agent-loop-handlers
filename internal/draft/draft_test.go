@@ -442,3 +442,44 @@ func TestT4_StageSchemasMatchAllowedOutcomes(t *testing.T) {
 func unmarshalInstance(s string) (any, error) {
 	return jsonschema.UnmarshalJSON(strings.NewReader(s))
 }
+
+// TestT4D4_EmptyOrBlankFindingPathIsNotGiven: an empty or blank finding
+// path counts as not given (work plan D4): the review converts and the
+// finding has no path.
+func TestT4D4_EmptyOrBlankFindingPathIsNotGiven(t *testing.T) {
+	in := input(contract.StageReview)
+	for _, p := range []string{`""`, `"   "`, "\"\\t\\n\""} {
+		d := `{"result":"done","done":{"summary":"s","rulings":[{"finding":"F1","status":"open"}],"manual_rulings":[{"comment":"MC-1","ruling":"open"}],"new_findings":[{"score":2,"path":` + p + `,"line":null,"title":"t","body":"b"}]}}`
+		res, out := convertJSON(t, in, d)
+		if res.Result != contract.OutcomeDone {
+			t.Fatalf("path %s: result = %q (%+v)", p, res.Result, res.Failed)
+		}
+		if f := res.Done.Review.NewFindings[0]; f.Path != nil {
+			t.Fatalf("path %s: finding path = %q, want none", p, *f.Path)
+		}
+		validate(t, in, res, out)
+	}
+
+	// A line with a blank path is a line with no path, which the contract
+	// rejects when run.Finish validates the result.
+	d := `{"result":"done","done":{"summary":"s","rulings":[{"finding":"F1","status":"open"}],"manual_rulings":[{"comment":"MC-1","ruling":"open"}],"new_findings":[{"score":2,"path":" ","line":3,"title":"t","body":"b"}]}}`
+	res, out := convertJSON(t, in, d)
+	if res.Result != contract.OutcomeDone || res.Done.Review.NewFindings[0].Path != nil {
+		t.Fatalf("blank path with line: %+v", res)
+	}
+	data, err := json.Marshal(res)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := contract.ValidateResult(in, data, out); err == nil || !strings.Contains(err.Error(), "line needs a path") {
+		t.Fatalf("ValidateResult err = %v, want line needs a path", err)
+	}
+}
+
+// TestT4D4_GivenFindingPathIsKept: a finding path with text is copied as is.
+func TestT4D4_GivenFindingPathIsKept(t *testing.T) {
+	res, _ := convertJSON(t, input(contract.StageReview), reviewDone)
+	if p := res.Done.Review.NewFindings[0].Path; p == nil || *p != "api/login.go" {
+		t.Fatalf("finding path = %v", p)
+	}
+}
