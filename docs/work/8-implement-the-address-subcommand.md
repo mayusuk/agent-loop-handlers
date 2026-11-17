@@ -3,7 +3,7 @@
 **Issue:** [#8](https://github.com/mayusuk/agent-loop-handlers/issues/8) (feature)
 **Branch:** `issue/8-implement-the-address-subcommand`
 **Base:** `origin/main @ b1d71f1` (checked before branching)
-**Status:** Draft
+**Status:** Done
 
 ## Summary
 
@@ -51,4 +51,4 @@ None needing the owner.
 
 ## Outcome
 
-_Filled in before shipping._
+Built as planned: `gitx.Parents`, `stage.Address` (findings, manual and base_update modes) and `address` routed in the CLI, replacing the stub. Tests drive the stage through `runStage` with the fake claude and a bare remote, and check the remote branch is unchanged on every failed or non-done run. The prompt side (mode, IDs, base-update instructions) was already in place from #4. No follow-up issues filed.
