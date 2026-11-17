@@ -3,7 +3,7 @@
 **Issue:** [#4](https://github.com/mayusuk/agent-loop-handlers/issues/4) (feature)
 **Branch:** `issue/4-build-stage-prompts-with-base-branch`
 **Base:** `origin/main @ 2d32023` (checked before branching)
-**Status:** Draft
+**Status:** Done
 
 ## Summary
 
@@ -29,7 +29,7 @@ Adds `internal/prompt`, which builds the prompt each stage gives Claude Code: th
 ## Steps
 
 - [x] Built-in prompts, rules, facts template and draft formats; `Build` with the base-branch override and `--skill`; golden and git tests.
-- [ ] `ParseFlags` and the CLI wrapper accept `--skill`.
+- [x] `ParseFlags` and the CLI wrapper accept `--skill`.
 
 ## Acceptance criteria
 
@@ -60,4 +60,4 @@ Golden tests for each built-in prompt (and address `base_update`); git tests on 
 
 ## Outcome
 
-_Filled in before shipping._
+Added `internal/prompt` (`Build`, `Tail`, `ParseFlags`, embedded prompts in `builtin/`, golden files in `testdata/`) and made the stage subcommands accept `--skill`. The stages still return `not implemented`; T5–T7 call `Build` with a draft path and turn its errors into `failed` (D9). Deviation: the steps were merged into two commits, because the override and `--skill` share the git lookup. No follow-up issues: the draft format coupling with T4 (#5) is recorded in D2.

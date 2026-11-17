@@ -99,13 +99,33 @@ func TestFR18AC3_StageMismatchThroughCLI(t *testing.T) {
 }
 
 func TestStageArgumentsAreFailed(t *testing.T) {
-	e := env(t, "implement")
-	var stdout, stderr bytes.Buffer
-	if code := realMain([]string{"implement", "--skill", "x"}, func(k string) string { return e[k] }, &stdout, &stderr); code != 0 {
-		t.Fatalf("exit = %d", code)
+	cases := map[string][]string{
+		`implement: unknown argument "--model" (usage: implement [--skill <name>])`:      {"--model", "x"},
+		`implement: --skill is given more than once (usage: implement [--skill <name>])`: {"--skill", "a", "--skill", "b"},
+		`implement: --skill needs a skill name (usage: implement [--skill <name>])`:      {"--skill"},
 	}
-	if reason := readFailed(t, e, "implement"); reason != `implement takes no arguments in this release, got "--skill x"` {
-		t.Errorf("reason = %q", reason)
+	for want, args := range cases {
+		e := env(t, "implement")
+		var stdout, stderr bytes.Buffer
+		if code := realMain(append([]string{"implement"}, args...), func(k string) string { return e[k] }, &stdout, &stderr); code != 0 {
+			t.Fatalf("exit = %d", code)
+		}
+		if reason := readFailed(t, e, "implement"); reason != want {
+			t.Errorf("args %q: reason = %q, want %q", args, reason, want)
+		}
+	}
+}
+
+// TestD7_SkillFlagIsAccepted: --skill passes the argument check, so the
+// stub stage's own reason is the result (work plan #4 D7).
+func TestD7_SkillFlagIsAccepted(t *testing.T) {
+	for _, args := range [][]string{{"--skill", "work-issue"}, {"--skill=work-issue"}} {
+		e := env(t, "implement")
+		var stdout, stderr bytes.Buffer
+		realMain(append([]string{"implement"}, args...), func(k string) string { return e[k] }, &stdout, &stderr)
+		if reason := readFailed(t, e, "implement"); reason != "the implement stage is not implemented in this release" {
+			t.Errorf("args %q: reason = %q", args, reason)
+		}
 	}
 }
 
