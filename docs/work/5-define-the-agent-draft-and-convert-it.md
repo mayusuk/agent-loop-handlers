@@ -3,7 +3,7 @@
 **Issue:** [#5](https://github.com/mayusuk/agent-loop-handlers/issues/5) (feature)
 **Branch:** `issue/5-define-the-agent-draft-and-convert-it`
 **Base:** `origin/main @ e2bc54d` (checked before branching)
-**Status:** In progress
+**Status:** Done
 
 ## Summary
 
@@ -27,7 +27,7 @@ Add `internal/draft`: the agent's draft format per stage, as an embedded JSON Sc
 
 - [x] Schema, types and `Parse`, with tests for each shape and each rejection.
 - [x] `Convert`, with table tests that every allowed outcome per stage gives a result `contract.ValidateResult` accepts.
-- [ ] Prompt-example consistency test and `docs/agent-draft.md`.
+- [x] Prompt-example consistency test and `docs/agent-draft.md`.
 
 ## Acceptance criteria
 
@@ -55,4 +55,4 @@ None.
 
 ## Outcome
 
-_Filled in before shipping._
+Added `internal/draft` (`agent-draft.schema.json`, `Parse`, `Convert`) and `docs/agent-draft.md`. The format is #4's prompt format unchanged, so the prompts were not edited; a test parses every example in the prompt templates. `santhosh-tekuri/jsonschema/v6` (already used by agent-loop's contract tests) became a direct dependency. No deviations from the approach; no follow-up issues.
