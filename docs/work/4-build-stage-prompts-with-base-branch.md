@@ -28,7 +28,7 @@ Adds `internal/prompt`, which builds the prompt each stage gives Claude Code: th
 
 ## Steps
 
-- [ ] Built-in prompts, rules, facts template and draft formats; `Build` with the base-branch override and `--skill`; golden and git tests.
+- [x] Built-in prompts, rules, facts template and draft formats; `Build` with the base-branch override and `--skill`; golden and git tests.
 - [ ] `ParseFlags` and the CLI wrapper accept `--skill`.
 
 ## Acceptance criteria

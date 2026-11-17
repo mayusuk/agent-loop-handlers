@@ -1,0 +1,38 @@
+## Run facts
+
+- Stage: {{.Stage}}
+- Input file: `{{.InputPath}}`
+- Run: `{{.RunID}}`, attempt {{.Attempt}}
+- Deadline: {{.Deadline}}
+- Repository: {{.RepoURL}}, base branch `{{.BaseBranch}}` (read it as `origin/{{.BaseBranch}}`)
+- Workspace: `{{.WorkspacePath}}`, branch `{{.Branch}}`, head `{{.Head}}`
+- Item: {{.ItemRef}} ({{.ItemType}}), {{.ItemURL}}
+{{- if .Change}}
+- Change: {{.Change.Ref}}, {{.Change.URL}}, head `{{.Change.Head}}`, base tip `{{.Change.BaseTip}}`
+{{- else}}
+- Change: none
+{{- end}}
+{{- if .Review}}
+- Review kind: {{.Review.Kind}}{{if .Review.Round}}, round {{deref .Review.Round}}{{end}}
+- Reviewed commit: `{{.Review.Commit}}`
+- Blocking threshold: findings scored {{.Review.BlockingThreshold}} or more block the merge
+- Findings to rule on: {{list .Review.RuleFindings}}
+- Manual comments to rule on: {{list .Review.RuleManual}}
+{{- if eq (print .Review.Kind) "base_update"}}
+- Paths the base merge resolved, to check: {{list .Review.ResolvedPaths}}
+{{- end}}
+{{- end}}
+{{- if .Address}}
+- Address mode: {{.Address.Mode}}
+- Findings to answer: {{list .Address.AnswerFindings}}
+- Manual comments to answer: {{list .Address.AnswerManual}}
+{{- end}}
+- Draft file: `{{.DraftPath}}`
+{{- if eq (print .Stage) "implement"}}
+
+The branch may already hold commits from an interrupted run of this stage. Build on them.
+{{- end}}
+{{- if and .Address (eq (print .Address.Mode) "base_update")}}
+
+This is a base update. Merging `origin/{{.BaseBranch}}` into the branch has conflicts. Merge it (`git merge origin/{{.BaseBranch}}`), resolve the conflicts so both sides' intent is kept, run the checks, and commit the result as one merge commit. Never rebase, and make no other commits. Leave the replies empty.
+{{- end}}
