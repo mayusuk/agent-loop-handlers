@@ -19,8 +19,6 @@ import (
 	"github.com/mayusuk/agent-loop/contract"
 	"github.com/santhosh-tekuri/jsonschema/v6"
 	"github.com/santhosh-tekuri/jsonschema/v6/kind"
-	"golang.org/x/text/language"
-	"golang.org/x/text/message"
 )
 
 // MaxDraft is the largest draft file accepted, in bytes (work plan D3).
@@ -234,8 +232,6 @@ func Parse(s contract.Stage, data []byte) (Draft, error) {
 	return d, nil
 }
 
-var printer = message.NewPrinter(language.English)
-
 // schemaError reports the first leaf of a schema validation error as one
 // line naming the field.
 func schemaError(ve *jsonschema.ValidationError) error {
@@ -255,7 +251,12 @@ func schemaError(ve *jsonschema.ValidationError) error {
 	case *kind.AdditionalProperties:
 		msg = "has unknown fields " + strings.Join(k.Properties, ", ")
 	default:
-		msg = ve.ErrorKind.LocalizedString(printer)
+		// The library's own English message for the leaf, without
+		// importing golang.org/x/text for a printer (review R3).
+		msg = "fails the schema"
+		if out := ve.BasicOutput(); out.Error != nil {
+			msg = out.Error.String()
+		}
 	}
 	if field == "" {
 		return errors.New(msg)
