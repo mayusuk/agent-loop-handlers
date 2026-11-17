@@ -3,7 +3,7 @@
 **Issue:** [#2](https://github.com/mayusuk/agent-loop-handlers/issues/2) (feature)
 **Branch:** `issue/2-add-the-cli-skeleton-input-checks-and`
 **Base:** `origin/main @ f4b1cb8` (checked before branching)
-**Status:** In progress
+**Status:** Done
 
 ## Summary
 
@@ -30,7 +30,7 @@ Adds the `agent-loop-claude` program with the subcommands `implement`, `review`,
 
 - [x] `internal/run`: environment, input and contract checks, `Finish` with validation and atomic write, panic recovery; tests. Remove `internal/compat`.
 - [x] `cmd/agent-loop-claude`: subcommands, stage stubs, `mint` stub, `version`; tests.
-- [ ] Outcome, final verify.
+- [x] Outcome, final verify.
 
 ## Acceptance criteria
 
@@ -63,4 +63,6 @@ None.
 
 ## Outcome
 
-_Filled in before shipping._
+- Added `internal/run` (`Main`, `Run.Finish`, `Failed`, `Contracts`) and `cmd/agent-loop-claude` (`implement`, `review`, `address` stubs, the `mint` stub, `version [--json]`, `help`). Removed `internal/compat`.
+- Tests cover every check in D1 (each missing variable, unreadable and invalid input, contract `2.0` and other bad versions, a later `1.x` minor, stage mismatch, a bad `AGENT_LOOP_OUT`), a rejected result and a disallowed outcome being replaced by `failed`, a panic, `Finish` twice, the reason folding, and the real exit codes of the built binary.
+- No deviation from the approach. No follow-up issues: `--skill` and the real stages are already T3 to T7 (#4 to #8).

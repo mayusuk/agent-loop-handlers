@@ -86,7 +86,7 @@ func printVersion(args []string, stdout, stderr io.Writer) int {
 	asJSON := false
 	for _, a := range args {
 		switch a {
-		case "--json", "-json":
+		case "--json":
 			asJSON = true
 		default:
 			fmt.Fprintf(stderr, "agent-loop-claude version: unknown argument %q\nusage: agent-loop-claude version [--json]\n", a)
