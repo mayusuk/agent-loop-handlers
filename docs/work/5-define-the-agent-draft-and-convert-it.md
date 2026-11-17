@@ -56,3 +56,5 @@ None.
 ## Outcome
 
 Added `internal/draft` (`agent-draft.schema.json`, `Parse`, `Convert`) and `docs/agent-draft.md`. The format is #4's prompt format unchanged, so the prompts were not edited; a test parses every example in the prompt templates. `santhosh-tekuri/jsonschema/v6` (already used by agent-loop's contract tests) became a direct dependency. No deviations from the approach; no follow-up issues.
+
+Review round 1: R2 led to a change (an empty or blank finding `path` now counts as not given, per D4, with tests). R3 led to a change (`golang.org/x/text` is no longer a direct dependency; schema errors use the library's own message). R1 (macOS CI queued) needed no code change; the push re-runs CI. No pushbacks.
