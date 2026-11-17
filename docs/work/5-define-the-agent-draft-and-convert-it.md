@@ -25,8 +25,8 @@ Add `internal/draft`: the agent's draft format per stage, as an embedded JSON Sc
 
 ## Steps
 
-- [ ] Schema, types and `Parse`, with tests for each shape and each rejection.
-- [ ] `Convert`, with table tests that every allowed outcome per stage gives a result `contract.ValidateResult` accepts.
+- [x] Schema, types and `Parse`, with tests for each shape and each rejection.
+- [x] `Convert`, with table tests that every allowed outcome per stage gives a result `contract.ValidateResult` accepts.
 - [ ] Prompt-example consistency test and `docs/agent-draft.md`.
 
 ## Acceptance criteria
