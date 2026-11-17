@@ -25,7 +25,7 @@ Wire the runner, prompts and draft conversion into the `address` subcommand, as 
 
 ## Steps
 
-- [ ] `gitx.Parents`, with a test.
+- [x] `gitx.Parents`, with a test.
 - [ ] `stage.Address` and the CLI wiring, with end-to-end tests using the fake claude and a bare remote.
 
 ## Acceptance criteria

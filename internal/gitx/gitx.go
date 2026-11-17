@@ -114,6 +114,19 @@ func IsAncestor(ctx context.Context, dir, a, b string) (bool, error) {
 	return false, fmt.Errorf("git merge-base: %w", err)
 }
 
+// Parents returns the parents of commit sha, first parent first.
+func Parents(ctx context.Context, dir, sha string) ([]string, error) {
+	out, err := Git(ctx, dir, "rev-list", "--parents", "-n", "1", sha+"^{commit}", "--")
+	if err != nil {
+		return nil, err
+	}
+	f := strings.Fields(string(out))
+	if len(f) == 0 {
+		return nil, fmt.Errorf("git rev-list: no commit %s", sha)
+	}
+	return f[1:], nil
+}
+
 // Dirty reports whether the working tree has changes that are not
 // committed, untracked files included.
 func Dirty(ctx context.Context, dir string) (bool, error) {
