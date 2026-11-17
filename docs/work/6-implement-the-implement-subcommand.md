@@ -24,7 +24,7 @@ Wire the runner (#3), the prompts (#4) and the draft conversion (#5) into the `i
 
 ## Steps
 
-- [ ] `internal/gitx` with tests against a local bare repository.
+- [x] `internal/gitx` with tests against a local bare repository.
 - [ ] `internal/stage` `Implement`, `run` log accessors, and the CLI wiring, with end-to-end tests using the fake claude and a bare remote.
 
 ## Acceptance criteria
