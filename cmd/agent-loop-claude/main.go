@@ -4,6 +4,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/mayusuk/agent-loop-handlers/internal/prompt"
 	"github.com/mayusuk/agent-loop-handlers/internal/run"
+	"github.com/mayusuk/agent-loop-handlers/internal/stage"
 	"github.com/mayusuk/agent-loop/contract"
 )
 
@@ -50,10 +52,15 @@ func realMain(args []string, getenv func(string) string, stdout, stderr io.Write
 	}
 	cmd, rest := args[0], args[1:]
 	switch cmd {
-	case "implement", "review", "address":
-		return run.Main(contract.Stage(cmd), rest, getenv, stderr, stage(notImplemented))
+	case "implement":
+		env := stage.Env{Getenv: getenv, Environ: os.Environ()}
+		return run.Main(contract.StageImplement, rest, getenv, stderr, withFlags(func(r *run.Run, f prompt.Flags) contract.Result {
+			return stage.Implement(context.Background(), r, f, env)
+		}))
+	case "review", "address":
+		return run.Main(contract.Stage(cmd), rest, getenv, stderr, withFlags(notImplemented))
 	case "mint":
-		return run.Main(contract.StageMint, rest, getenv, stderr, stage(mint))
+		return run.Main(contract.StageMint, rest, getenv, stderr, withFlags(mint))
 	case "version":
 		return printVersion(rest, stdout, stderr)
 	case "help", "-h", "--help":
@@ -67,13 +74,14 @@ func realMain(args []string, getenv func(string) string, stdout, stderr io.Write
 // stageBody is a stage subcommand's body, given its parsed arguments.
 type stageBody func(r *run.Run, f prompt.Flags) contract.Result
 
-// stage wraps a stage body with the argument parsing shared by every stage
-// subcommand: --skill <name>, and nothing else (work plan #4 D7).
-func stage(body stageBody) run.Body {
+// withFlags wraps a stage body with the argument parsing shared by every stage
+// subcommand: --skill, --claude and --deadline-margin, and nothing else
+// (work plan #4 D7, plan D3, D13).
+func withFlags(body stageBody) run.Body {
 	return func(r *run.Run) contract.Result {
 		f, err := prompt.ParseFlags(r.Args)
 		if err != nil {
-			return run.Failed(fmt.Sprintf("%s: %v (usage: %s [--skill <name>])", r.Stage, err, r.Stage))
+			return run.Failed(fmt.Sprintf("%s: %v (usage: %s %s)", r.Stage, err, r.Stage, prompt.Usage))
 		}
 		return body(r, f)
 	}

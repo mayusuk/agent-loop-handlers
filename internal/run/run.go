@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"runtime/debug"
 	"strings"
+	"sync"
 	"unicode/utf8"
 
 	"github.com/mayusuk/agent-loop/contract"
@@ -72,7 +73,7 @@ func Main(stage contract.Stage, args []string, getenv func(string) string, stder
 		Input:      contract.Input{Stage: stage, RunID: UnknownRunID},
 		ResultPath: getenv(EnvResult),
 		Args:       args,
-		stderr:     stderr,
+		stderr:     &lockedWriter{w: stderr},
 	}
 	if r.ResultPath == "" {
 		r.logf("%s is not set; no result can be written", EnvResult)
@@ -264,6 +265,25 @@ func Failed(reason string) contract.Result {
 	}
 	return contract.Result{Result: contract.OutcomeFailed, Failed: &contract.Failed{Reason: reason}}
 }
+
+// lockedWriter serialises writes to the run log, which claude's and git's
+// stdout and stderr copiers share.
+type lockedWriter struct {
+	mu sync.Mutex
+	w  io.Writer
+}
+
+func (l *lockedWriter) Write(p []byte) (int, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.w.Write(p)
+}
+
+// Logf writes one line to the run log (stderr).
+func (r *Run) Logf(format string, a ...any) { r.logf(format, a...) }
+
+// Log is the run log (stderr), for output such as claude's and git's.
+func (r *Run) Log() io.Writer { return r.stderr }
 
 func (r *Run) logf(format string, a ...any) {
 	fmt.Fprintf(r.stderr, "agent-loop-claude %s: %s\n", r.Stage, fmt.Sprintf(format, a...))
