@@ -31,7 +31,7 @@ Unix only (`Setpgid`, `syscall.Kill`), like the worker's `local` runner; CI runs
 
 ## Steps
 
-- [ ] Fake claude binary and its builder.
+- [x] Fake claude binary and its builder.
 - [ ] `internal/claude`: binary lookup, command line, deadline, usage parsing, run with process-group stop; tests against the fake for every acceptance criterion.
 - [ ] Outcome, verify, ship.
 
