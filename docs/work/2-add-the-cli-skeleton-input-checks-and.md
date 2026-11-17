@@ -28,7 +28,7 @@ Adds the `agent-loop-claude` program with the subcommands `implement`, `review`,
 
 ## Steps
 
-- [ ] `internal/run`: environment, input and contract checks, `Finish` with validation and atomic write, panic recovery; tests. Remove `internal/compat`.
+- [x] `internal/run`: environment, input and contract checks, `Finish` with validation and atomic write, panic recovery; tests. Remove `internal/compat`.
 - [ ] `cmd/agent-loop-claude`: subcommands, stage stubs, `mint` stub, `version`; tests.
 - [ ] Outcome, final verify.
 
@@ -41,7 +41,13 @@ Adds the `agent-loop-claude` program with the subcommands `implement`, `review`,
 
 ## Decisions
 
-None.
+- **D1** [gap] INTEGRATION-SPEC §3.1, plan D2: the checks run in this order and the first failure is the result: `AGENT_LOOP_RESULT` set (else exit 1, nothing written), `AGENT_LOOP_INPUT` set and readable, `AGENT_LOOP_CONTRACT` set with major 1, the input parses (`contract.ParseInput`) and has a `run_id`, the input's `stage` matches the subcommand, `AGENT_LOOP_OUT` set and an existing directory. Why: the result path is needed to report anything; the contract is checked before parsing so a `2.0` worker gets a reason about the contract, not about the input.
+- **D2** [gap] INTEGRATION-SPEC §5.1 (`run_id` is required and non-empty): a `failed` result written when the input gives no `run_id` (unset, unreadable, not JSON, or no string `run_id`) uses `run_id` `unknown`. When the input is JSON with a string `run_id` but fails a later check, that `run_id` is used. Why: the worker treats a mismatched `run_id` as `failed` anyway, and the reason in the log still helps the owner.
+- **D3** [ambiguity] INTEGRATION-SPEC §2, plan D7: "a major other than 1" is read as: any `1.x` in `AGENT_LOOP_CONTRACT` or the input is accepted, including minors above `1.0`, because a 1.0 handler ignores fields a later minor adds; a value that isn't `MAJOR.MINOR` is `failed`. The result is always written as `1.0`.
+- **D4** [gap] INTEGRATION-SPEC §3.1: `AGENT_LOOP_OUT` must name an existing directory before the stage runs; otherwise `failed`. Why: every `*_file` result needs it, so failing early costs less than failing after the agent ran.
+- **D5** [gap] plan D2, plan Approach (`internal/draft`): `Finish` always sets `contract_version` to `1.0` and `run_id` to the input's, whatever the stage set. Why: the handler owns these fields; the agent never supplies them.
+- **D6** [gap] INTEGRATION-SPEC §5.1: a `failed.reason` the handler builds is folded to one line (runs of whitespace, including newlines, become one space), cut to 500 characters ending in `…`, and an empty reason becomes `unknown error`. A panic is `internal error: <panic value>`, with the stack written to stderr (the run log). Why: §5.1 limits the reason to one line of 500 characters but doesn't say how a handler gets there.
+- **D7** [gap] INTEGRATION-SPEC §3.1: `result.json` is written through a temporary file in the same directory, synced and renamed over the path (mode 0644), replacing any file already there. The result is written once per run; a second `Finish` is logged and ignored. Why: the worker must never read a partial result, and the first result is the one the stage meant.
 
 ## Verification
 
