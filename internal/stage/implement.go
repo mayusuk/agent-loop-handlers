@@ -104,11 +104,11 @@ func checkWorkspace(ctx context.Context, ws contract.Workspace) error {
 // D5). Usage is set on every result once claude started (work plan D6).
 func agent(ctx context.Context, r *run.Run, f prompt.Flags, env Env) contract.Result {
 	in := r.Input
-	stopAt, err := claude.StopAt(in.Deadline, claude.DefaultMargin)
+	stopAt, err := claude.StopAt(in.Deadline, f.Margin(claude.DefaultMargin))
 	if err != nil {
 		return run.Failed(err.Error())
 	}
-	bin, err := claude.Find("", env.Getenv)
+	bin, err := claude.Find(f.Claude, env.Getenv)
 	if err != nil {
 		return run.Failed(err.Error())
 	}

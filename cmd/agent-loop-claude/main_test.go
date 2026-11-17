@@ -111,9 +111,9 @@ func TestFR18AC3_StageMismatchThroughCLI(t *testing.T) {
 
 func TestStageArgumentsAreFailed(t *testing.T) {
 	cases := map[string][]string{
-		`implement: unknown argument "--model" (usage: implement [--skill <name>])`:      {"--model", "x"},
-		`implement: --skill is given more than once (usage: implement [--skill <name>])`: {"--skill", "a", "--skill", "b"},
-		`implement: --skill needs a skill name (usage: implement [--skill <name>])`:      {"--skill"},
+		`implement: unknown argument "--model" (usage: implement [--skill <name>] [--claude <path>] [--deadline-margin <duration>])`:      {"--model", "x"},
+		`implement: --skill is given more than once (usage: implement [--skill <name>] [--claude <path>] [--deadline-margin <duration>])`: {"--skill", "a", "--skill", "b"},
+		`implement: --skill needs a skill name (usage: implement [--skill <name>] [--claude <path>] [--deadline-margin <duration>])`:      {"--skill"},
 	}
 	for want, args := range cases {
 		e := env(t, "implement")
@@ -127,10 +127,15 @@ func TestStageArgumentsAreFailed(t *testing.T) {
 	}
 }
 
-// TestD7_SkillFlagIsAccepted: --skill passes the argument check, so the
-// stub stage's own reason is the result (work plan #4 D7).
+// TestD7_SkillFlagIsAccepted: --skill, --claude and --deadline-margin pass
+// the argument check, so the stub stage's own reason is the result (work
+// plan #4 D7, plan D3, D13).
 func TestD7_SkillFlagIsAccepted(t *testing.T) {
-	for _, args := range [][]string{{"--skill", "work-issue"}, {"--skill=work-issue"}} {
+	for _, args := range [][]string{
+		{"--skill", "work-issue"}, {"--skill=work-issue"},
+		{"--claude", "/x/claude"}, {"--claude=/x/claude", "--deadline-margin=30s"},
+		{"--deadline-margin", "1m", "--skill", "review-pr"},
+	} {
 		e := env(t, "review")
 		var stdout, stderr bytes.Buffer
 		realMain(append([]string{"review"}, args...), func(k string) string { return e[k] }, &stdout, &stderr)

@@ -21,6 +21,7 @@ Wire the runner (#3), the prompts (#4) and the draft conversion (#5) into the `i
 - `internal/stage`: `Implement(ctx, r, flags, env)`: check the workspace is on `workspace.branch` at `workspace.head`, make a private draft directory, build the prompt, run `claude` with `AGENT_LOOP_CLAUDE_DRAFT` set, convert the draft, and for `done` check for a new commit that builds on `workspace.head`, push it and set `head`. Usage from Claude's output goes on every result.
 - `internal/run`: export `Logf` and `Log()` so stages write to the run log.
 - `cmd/agent-loop-claude`: route `implement` to the stage.
+- `internal/prompt.ParseFlags`: add `--claude` and `--deadline-margin` (D7).
 
 ## Steps
 
@@ -42,7 +43,7 @@ Wire the runner (#3), the prompts (#4) and the draft conversion (#5) into the `i
 - **D4** [gap] Plan D4: the push is `git push --porcelain origin <sha>:refs/heads/<workspace.branch>` with `GIT_TERMINAL_PROMPT=0`, never forced; `done.head` is that SHA. A refused or failed push is `failed: push to <branch> failed: <git's last error line>`. Why: pushing the SHA, not `HEAD`, means `head` is what was pushed even if the tree moves, and the prompt-off setting keeps git headless (§3.1).
 - **D5** [gap] FR-18 AC3, AC4: a claude that stops at the time limit gives `failed: time limit reached`; any other claude error gives `failed: <error>` (for example `claude exited with code 3`), and a draft written before the failure is ignored. A prompt or workspace error gives `failed` with its reason. Why: a run that did not finish cleanly is not trusted to have finished its work.
 - **D6** [gap] §5.1 `usage`: usage from claude's output is set on every result of a run in which claude started, including `failed`, `blocked` and `needs_owner`. Why: the spend is real whatever the outcome.
-- **D7** [open] Plan D3, D13: the `--deadline-margin` and `--claude` flags the plan names are not added here; the margin is the default 2 minutes and claude is found through `AGENT_LOOP_CLAUDE_BIN` or `PATH`. Open: whether a later task adds the flags.
+- **D7** [gap] Plan D3, D13: every stage subcommand accepts `--claude <path>` and `--deadline-margin <duration>` (also as `--flag=value`, each at most once), alongside `--skill`. The margin is a Go duration of 0 or more (default 2 minutes); `--claude` wins over `AGENT_LOOP_CLAUDE_BIN`, then `PATH`. A missing, empty, unparsable or negative value is `failed` with the usage line. Why: plan D3 and D13 name the flags; #3 deferred them to T5. Review R1.
 
 ## Verification
 
@@ -54,4 +55,6 @@ None needing the owner.
 
 ## Outcome
 
-Built as planned: `internal/gitx` (head, branch, ancestry, dirty check, plain push with the refusal reason from `--porcelain`), `internal/stage.Implement`, `run.Logf`/`run.Log` (the run log is now serialised, since claude's and git's stdout and stderr copiers share it), and `implement` routed in the CLI. `review` and `address` stay stubs. Tests cover every acceptance criterion against a local bare remote with the fake claude, plus the workspace check, a reset branch, a missing draft and the draft's location. No follow-up issues filed; D7 is open for a later task.
+Built as planned: `internal/gitx` (head, branch, ancestry, dirty check, plain push with the refusal reason from `--porcelain`), `internal/stage.Implement`, `run.Logf`/`run.Log` (the run log is now serialised, since claude's and git's stdout and stderr copiers share it), and `implement` routed in the CLI. `review` and `address` stay stubs. Tests cover every acceptance criterion against a local bare remote with the fake claude, plus the workspace check, a reset branch, a missing draft and the draft's location. No follow-up issues filed.
+
+Review round 1: R1 led to `--claude` and `--deadline-margin` in `ParseFlags`, used by the implement stage (D7, now settled rather than open). R2–R4 led to tests for the time limit (with the margin flag), uncommitted changes left out of the push, and the draft under `TMPDIR`. No pushbacks.

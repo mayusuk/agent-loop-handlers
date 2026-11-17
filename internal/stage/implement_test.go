@@ -62,6 +62,10 @@ type fixture struct {
 	remote string
 	ws     string
 	head   string
+	// flags are the stage's arguments; deadline, if set, replaces the
+	// input's hour-away deadline.
+	flags    prompt.Flags
+	deadline time.Time
 }
 
 // newFixture makes a bare remote with main, and a workspace cloned from it
@@ -123,12 +127,16 @@ func (f *fixture) implement(shell, draft string, extra ...string) outcome {
 	for i := 0; i+1 < len(extra); i += 2 {
 		t.Setenv(extra[i], extra[i+1])
 	}
+	deadline := time.Now().Add(time.Hour)
+	if !f.deadline.IsZero() {
+		deadline = f.deadline
+	}
 	in := contract.Input{
 		ContractVersion: contract.Version,
 		RunID:           "r-1",
 		Stage:           contract.StageImplement,
 		Attempt:         1,
-		Deadline:        time.Now().Add(time.Hour).UTC().Format(time.RFC3339),
+		Deadline:        deadline.UTC().Format(time.RFC3339),
 		Identity:        "coder",
 		Project:         contract.InputProject{Name: "p", Tracker: "github", CodeHost: "github"},
 		Repo:            contract.InputRepo{URL: "https://github.com/o/r", BaseBranch: "main"},
@@ -151,10 +159,15 @@ func (f *fixture) implement(shell, draft string, extra ...string) outcome {
 		run.EnvContract: "1.0",
 		claude.EnvBin:   fakeBin,
 	}
+	for i := 0; i+1 < len(extra); i += 2 {
+		if strings.HasPrefix(extra[i], "AGENT_LOOP_") {
+			vars[extra[i]] = extra[i+1]
+		}
+	}
 	getenv := func(k string) string { return vars[k] }
 	var stderr bytes.Buffer
 	code := run.Main(contract.StageImplement, nil, getenv, &stderr, func(r *run.Run) contract.Result {
-		return Implement(context.Background(), r, prompt.Flags{}, Env{Getenv: getenv, Environ: os.Environ()})
+		return Implement(context.Background(), r, f.flags, Env{Getenv: getenv, Environ: os.Environ()})
 	})
 	if code != run.ExitResultWritten {
 		t.Fatalf("exit = %d\n%s", code, stderr.String())
@@ -339,4 +352,110 @@ func TestD1_DraftIsOutsideWorkspaceAndRemoved(t *testing.T) {
 	if _, err := os.Stat(filepath.Dir(p)); !os.IsNotExist(err) {
 		t.Errorf("draft directory still exists: %v", err)
 	}
+}
+
+// TestD1_DraftIsUnderTMPDIR: the draft directory is made under TMPDIR, the
+// per-run temporary directory the sandbox lets claude write to (work plan
+// D1).
+func TestD1_DraftIsUnderTMPDIR(t *testing.T) {
+	f := newFixture(t, false)
+	tmp := t.TempDir()
+	t.Setenv("TMPDIR", tmp)
+	rec := filepath.Join(t.TempDir(), "draftpath")
+	o := f.implement(`echo "$AGENT_LOOP_CLAUDE_DRAFT" > `+rec+` && `+commitAndDraft, doneDraft)
+	if o.res.Result != contract.OutcomeDone {
+		t.Fatalf("result = %s\n%s", o.res.Result, o.stderr)
+	}
+	data, _ := os.ReadFile(rec)
+	p := strings.TrimSpace(string(data))
+	if !strings.HasPrefix(p, tmp+string(filepath.Separator)+"agent-loop-claude-") {
+		t.Errorf("draft path %q is not in an agent-loop-claude-* directory under TMPDIR %q", p, tmp)
+	}
+}
+
+// TestD3_UncommittedChangesAreNotPushed: only the commit is pushed; a file
+// the agent left uncommitted is not on the remote, and the log says so
+// (work plan D3).
+func TestD3_UncommittedChangesAreNotPushed(t *testing.T) {
+	f := newFixture(t, false)
+	o := f.implement(`echo a > a.txt && git add a.txt && git commit -qm a && echo b > b.txt && echo c >> a.txt && `+draftOnly, doneDraft)
+	if o.res.Result != contract.OutcomeDone {
+		t.Fatalf("result = %s: %+v\n%s", o.res.Result, o.res.Failed, o.stderr)
+	}
+	head := o.res.Done.Implement.Head
+	if head != f.remoteHead() || head != git(t, f.ws, "rev-parse", "HEAD") {
+		t.Fatalf("done.head %s, remote %s: want the commit with a", head, f.remoteHead())
+	}
+	if files := git(t, f.remote, "ls-tree", "--name-only", head); files != "a.txt" {
+		t.Errorf("remote tree = %q, want only a.txt", files)
+	}
+	if a := git(t, f.remote, "show", head+":a.txt"); a != "a" {
+		t.Errorf("remote a.txt = %q, want the committed %q", a, "a")
+	}
+	if !strings.Contains(o.stderr, "uncommitted changes in the workspace are not pushed") {
+		t.Errorf("log does not mention the uncommitted changes:\n%s", o.stderr)
+	}
+}
+
+// TestFR18AC4_TimeLimitIsFailed: a claude still running at the deadline
+// minus --deadline-margin is stopped, and the result is exactly "time limit
+// reached", with nothing pushed even though it committed and wrote a done
+// draft (FR-18 AC4, plan D3, work plan D5).
+func TestFR18AC4_TimeLimitIsFailed(t *testing.T) {
+	f := newFixture(t, false)
+	f.deadline = time.Now().Add(4 * time.Second)
+	f.flags = prompt.Flags{DeadlineMargin: 2 * time.Second, MarginSet: true}
+	start := time.Now()
+	// The fake commits and writes a done draft, then hangs past the stop
+	// time.
+	o := f.implement(commitAndDraft, doneDraft, "FAKECLAUDE_SLEEP", "30s")
+	if r := failedReason(t, o); r != "time limit reached" {
+		t.Errorf("reason = %q", r)
+	}
+	// claude ran (the 2s margin, not the 2m default, set the stop time)
+	// and committed, but nothing was pushed.
+	if git(t, f.ws, "rev-parse", "HEAD") == f.head {
+		t.Error("claude did not run: --deadline-margin was not used")
+	}
+	if took := time.Since(start); took > 15*time.Second {
+		t.Errorf("took %s; claude was not stopped at the margin", took)
+	}
+	if h := f.remoteHead(); h != "" {
+		t.Errorf("remote branch = %s, want none", h)
+	}
+}
+
+// TestPlanD3_DefaultMarginStopsBeforeStarting: without --deadline-margin
+// the margin is 2 minutes, so a deadline a minute away is already past the
+// stop time and claude never runs (plan D3).
+func TestPlanD3_DefaultMarginStopsBeforeStarting(t *testing.T) {
+	f := newFixture(t, false)
+	f.deadline = time.Now().Add(time.Minute)
+	rec := filepath.Join(t.TempDir(), "ran")
+	o := f.implement(`touch `+rec+` && `+commitAndDraft, doneDraft)
+	if r := failedReason(t, o); r != "time limit reached" {
+		t.Errorf("reason = %q", r)
+	}
+	if _, err := os.Stat(rec); !os.IsNotExist(err) {
+		t.Errorf("claude ran: %v", err)
+	}
+}
+
+// TestPlanD13_ClaudeFlagWinsOverTheEnvironment: --claude names the binary
+// even when AGENT_LOOP_CLAUDE_BIN points elsewhere (plan D13).
+func TestPlanD13_ClaudeFlagWinsOverTheEnvironment(t *testing.T) {
+	f := newFixture(t, false)
+	f.flags = prompt.Flags{Claude: fakeBin}
+	o := f.implement(commitAndDraft, doneDraft, claude.EnvBin, filepath.Join(t.TempDir(), "missing"))
+	if o.res.Result != contract.OutcomeDone {
+		t.Fatalf("result = %s: %+v\n%s", o.res.Result, o.res.Failed, o.stderr)
+	}
+	if o.res.Done.Implement.Head != f.remoteHead() {
+		t.Errorf("done.head %s is not the remote head %s", o.res.Done.Implement.Head, f.remoteHead())
+	}
+
+	// Without the flag the environment's missing binary is used and fails.
+	f = newFixture(t, false)
+	o = f.implement(commitAndDraft, doneDraft, claude.EnvBin, filepath.Join(t.TempDir(), "missing"))
+	failedReason(t, o)
 }

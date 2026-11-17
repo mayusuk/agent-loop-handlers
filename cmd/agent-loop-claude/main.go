@@ -75,12 +75,13 @@ func realMain(args []string, getenv func(string) string, stdout, stderr io.Write
 type stageBody func(r *run.Run, f prompt.Flags) contract.Result
 
 // withFlags wraps a stage body with the argument parsing shared by every stage
-// subcommand: --skill <name>, and nothing else (work plan #4 D7).
+// subcommand: --skill, --claude and --deadline-margin, and nothing else
+// (work plan #4 D7, plan D3, D13).
 func withFlags(body stageBody) run.Body {
 	return func(r *run.Run) contract.Result {
 		f, err := prompt.ParseFlags(r.Args)
 		if err != nil {
-			return run.Failed(fmt.Sprintf("%s: %v (usage: %s [--skill <name>])", r.Stage, err, r.Stage))
+			return run.Failed(fmt.Sprintf("%s: %v (usage: %s %s)", r.Stage, err, r.Stage, prompt.Usage))
 		}
 		return body(r, f)
 	}

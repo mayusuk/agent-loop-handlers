@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/mayusuk/agent-loop/contract"
 )
@@ -462,6 +463,30 @@ func TestBuildRejectsMintAndInvalidSkill(t *testing.T) {
 	}
 }
 
+// TestPlanD3D13_ParseFlagsClaudeAndMargin: --claude and --deadline-margin
+// are read in both forms, alongside --skill; an absent margin is the
+// default (plan D3, D13).
+func TestPlanD3D13_ParseFlagsClaudeAndMargin(t *testing.T) {
+	f, err := ParseFlags([]string{"--claude", "/opt/claude", "--deadline-margin", "30s", "--skill=work-issue"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if f.Claude != "/opt/claude" || f.Margin(time.Hour) != 30*time.Second || f.Skill != "work-issue" {
+		t.Errorf("flags = %+v", f)
+	}
+	f, err = ParseFlags([]string{"--claude=/x", "--deadline-margin=0s"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if f.Claude != "/x" || f.Margin(time.Hour) != 0 {
+		t.Errorf("flags = %+v", f)
+	}
+	f, err = ParseFlags(nil)
+	if err != nil || f.Claude != "" || f.Margin(time.Hour) != time.Hour {
+		t.Errorf("flags = %+v, %v; want the default margin", f, err)
+	}
+}
+
 func TestD7_ParseFlags(t *testing.T) {
 	ok := map[string]struct {
 		args []string
@@ -482,13 +507,20 @@ func TestD7_ParseFlags(t *testing.T) {
 		args []string
 		want string
 	}{
-		"unknown":    {[]string{"--model", "x"}, `unknown argument "--model"`},
-		"positional": {[]string{"x"}, `unknown argument "x"`},
-		"no name":    {[]string{"--skill"}, "--skill needs a skill name"},
-		"empty name": {[]string{"--skill="}, `invalid skill name ""`},
-		"flag name":  {[]string{"--skill", "--x"}, `invalid skill name "--x"`},
-		"space":      {[]string{"--skill", "a b"}, `invalid skill name "a b"`},
-		"twice":      {[]string{"--skill", "a", "--skill", "b"}, "--skill is given more than once"},
+		"unknown":         {[]string{"--model", "x"}, `unknown argument "--model"`},
+		"positional":      {[]string{"x"}, `unknown argument "x"`},
+		"no name":         {[]string{"--skill"}, "--skill needs a skill name"},
+		"empty name":      {[]string{"--skill="}, `invalid skill name ""`},
+		"flag name":       {[]string{"--skill", "--x"}, `invalid skill name "--x"`},
+		"space":           {[]string{"--skill", "a b"}, `invalid skill name "a b"`},
+		"twice":           {[]string{"--skill", "a", "--skill", "b"}, "--skill is given more than once"},
+		"no path":         {[]string{"--claude"}, "--claude needs a path"},
+		"empty path":      {[]string{"--claude="}, "--claude needs a path"},
+		"claude twice":    {[]string{"--claude", "a", "--claude=b"}, "--claude is given more than once"},
+		"no margin":       {[]string{"--deadline-margin"}, "--deadline-margin needs a duration"},
+		"bad margin":      {[]string{"--deadline-margin", "5"}, `--deadline-margin: invalid duration "5"`},
+		"negative margin": {[]string{"--deadline-margin=-1s"}, "--deadline-margin: -1s is negative"},
+		"margin twice":    {[]string{"--deadline-margin", "1m", "--deadline-margin", "2m"}, "--deadline-margin is given more than once"},
 	}
 	for name, c := range bad {
 		_, err := ParseFlags(c.args)
