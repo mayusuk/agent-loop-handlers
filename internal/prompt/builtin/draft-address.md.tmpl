@@ -1,0 +1,18 @@
+## Draft
+
+Write the draft to `{{.DraftPath}}` as one JSON object, with text inline as markdown. Give exactly one of these shapes:
+
+```json
+{ "result": "done", "done": {
+    "replies": [ { "finding": "F3", "kind": "fixed", "body": "<the reply>" },
+                 { "finding": "F5", "kind": "deferred", "deferred_to": "61", "body": "<the reply>" } ],
+    "manual_replies": [ { "comment": "MC-981", "kind": "explained", "body": "<the reply>" } ] } }
+{ "result": "blocked", "blocked": { "reason": "<why>", "dependency": "<item ref, optional>" } }
+{ "result": "needs_owner", "needs_owner": { "question": "<what the owner must decide>" } }
+{ "result": "failed", "failed": { "reason": "<one line>" } }
+```
+
+- Give one reply for each finding and each manual comment to answer. `kind` is `fixed`, `explained`, `deferred`, `not_valid` or `needs_info`. `deferred` needs `deferred_to`, an open item that will do the work.
+- In a base update, `replies` and `manual_replies` are empty lists.
+
+Do not add other fields. The handler fills in the pushed head itself.

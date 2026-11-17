@@ -1,0 +1,12 @@
+## Draft
+
+Write the draft to `{{.DraftPath}}` as one JSON object, with text inline as markdown. Give exactly one of these shapes:
+
+```json
+{ "result": "done", "done": { "change": { "title": "<one-line title>", "body": "<what changed, why, and how it was tested>" } } }
+{ "result": "blocked", "blocked": { "reason": "<why>", "dependency": "<item ref, optional>" } }
+{ "result": "needs_owner", "needs_owner": { "question": "<what the owner must decide>" } }
+{ "result": "failed", "failed": { "reason": "<one line>" } }
+```
+
+Do not add other fields. The handler fills in the pushed head itself.

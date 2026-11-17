@@ -1,0 +1,5 @@
+# Run the `{{.Skill}}` skill
+
+Run the `{{.Skill}}` skill (`/{{.Skill}}`) to do this {{.Stage}} stage for the {{if eq .Stage "implement"}}item{{else}}change{{end}} named in the run facts below, in this workspace.
+
+Run it in result-only mode: the skill's work ends by writing the draft described below. Whatever the skill's own instructions say, do not post to GitHub, and do not push, open, comment on, label, review or merge anything. The handler that started you turns the draft into the stage's result, and agent-loop posts it.

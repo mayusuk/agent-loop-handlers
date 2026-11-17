@@ -1,0 +1,18 @@
+## Draft
+
+Write the draft to `{{.DraftPath}}` as one JSON object, with text inline as markdown. Give exactly one of these shapes:
+
+```json
+{ "result": "done", "done": {
+    "summary": "<the review in a few sentences>",
+    "rulings": [ { "finding": "F3", "status": "addressed", "note": "<optional>" } ],
+    "manual_rulings": [ { "comment": "MC-981", "ruling": "open", "note": "<optional>" } ],
+    "new_findings": [ { "score": 4, "path": "api/login.go", "line": 88, "title": "<one line>", "body": "<the problem and a scenario>" } ] } }
+{ "result": "needs_owner", "needs_owner": { "question": "<what the owner must decide>" } }
+{ "result": "failed", "failed": { "reason": "<one line>" } }
+```
+
+- `rulings` has exactly one entry for each finding to rule on, and `manual_rulings` one for each manual comment to rule on. `status` is `open`, `partially_addressed`, `addressed` or `withdrawn`; `ruling` is `addressed` or `open`.
+- `score` is an integer from 1 to 5. `path` is relative to the repository root and must exist at the reviewed commit; `line` must be in that file. Use `null` for either when the finding isn't about a file or a line.
+
+Do not add other fields. The handler fills in the reviewed commit and the review kind itself.

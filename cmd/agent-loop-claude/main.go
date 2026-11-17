@@ -11,6 +11,7 @@ import (
 	"runtime/debug"
 	"strings"
 
+	"github.com/mayusuk/agent-loop-handlers/internal/prompt"
 	"github.com/mayusuk/agent-loop-handlers/internal/run"
 	"github.com/mayusuk/agent-loop/contract"
 )
@@ -63,22 +64,26 @@ func realMain(args []string, getenv func(string) string, stdout, stderr io.Write
 	return ExitUsage
 }
 
-// stage wraps a stage body with the argument check shared by every stage
-// subcommand. This release's stages take no arguments.
-func stage(body run.Body) run.Body {
+// stageBody is a stage subcommand's body, given its parsed arguments.
+type stageBody func(r *run.Run, f prompt.Flags) contract.Result
+
+// stage wraps a stage body with the argument parsing shared by every stage
+// subcommand: --skill <name>, and nothing else (work plan #4 D7).
+func stage(body stageBody) run.Body {
 	return func(r *run.Run) contract.Result {
-		if len(r.Args) > 0 {
-			return run.Failed(fmt.Sprintf("%s takes no arguments in this release, got %q", r.Stage, strings.Join(r.Args, " ")))
+		f, err := prompt.ParseFlags(r.Args)
+		if err != nil {
+			return run.Failed(fmt.Sprintf("%s: %v (usage: %s [--skill <name>])", r.Stage, err, r.Stage))
 		}
-		return body(r)
+		return body(r, f)
 	}
 }
 
-func notImplemented(r *run.Run) contract.Result {
+func notImplemented(r *run.Run, _ prompt.Flags) contract.Result {
 	return run.Failed(fmt.Sprintf("the %s stage is not implemented in this release", r.Stage))
 }
 
-func mint(*run.Run) contract.Result {
+func mint(*run.Run, prompt.Flags) contract.Result {
 	return run.Failed(MintReason)
 }
 
