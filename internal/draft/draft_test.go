@@ -2,6 +2,7 @@ package draft
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -481,5 +482,55 @@ func TestT4D4_GivenFindingPathIsKept(t *testing.T) {
 	res, _ := convertJSON(t, input(contract.StageReview), reviewDone)
 	if p := res.Done.Review.NewFindings[0].Path; p == nil || *p != "api/login.go" {
 		t.Fatalf("finding path = %v", p)
+	}
+}
+
+func convertWith(t *testing.T, in contract.Input, draft string, fix Fix) (contract.Result, string) {
+	t.Helper()
+	dir := t.TempDir()
+	out := filepath.Join(dir, "out")
+	os.Mkdir(out, 0o755)
+	p := filepath.Join(dir, "agent-draft.json")
+	os.WriteFile(p, []byte(draft), 0o644)
+	return ConvertWith(in, p, out, fix), out
+}
+
+func TestT6D8_FixChangesTheDoneDraftBeforeItIsWritten(t *testing.T) {
+	calls := 0
+	res, out := convertWith(t, input(contract.StageReview), reviewDone, func(d *Done) error {
+		calls++
+		d.NewFindings[0].Path = nil
+		d.NewFindings[0].Line = nil
+		d.NewFindings[0].Body = "moved\n\n" + d.NewFindings[0].Body
+		return nil
+	})
+	if calls != 1 {
+		t.Fatalf("fix called %d times", calls)
+	}
+	f := res.Done.Review.NewFindings[0]
+	if f.Path != nil || f.Line != nil {
+		t.Errorf("finding 1 = %+v, want no location", f)
+	}
+	if got := readOut(t, out, f.BodyFile); got != "moved\n\nCrashes when x is nil." {
+		t.Errorf("body = %q", got)
+	}
+}
+
+func TestT6D8_FixErrorIsFailedWithoutTheDraftPrefix(t *testing.T) {
+	res, _ := convertWith(t, input(contract.StageReview), reviewDone, func(*Done) error {
+		return errors.New("git cat-file: boom")
+	})
+	if res.Result != contract.OutcomeFailed || res.Failed.Reason != "git cat-file: boom" {
+		t.Fatalf("result = %+v", res)
+	}
+}
+
+func TestT6D8_FixIsNotCalledForOtherOutcomes(t *testing.T) {
+	res, _ := convertWith(t, input(contract.StageReview), `{"result":"failed","failed":{"reason":"no"}}`, func(*Done) error {
+		t.Error("fix called")
+		return nil
+	})
+	if res.Result != contract.OutcomeFailed {
+		t.Fatalf("result = %s", res.Result)
 	}
 }

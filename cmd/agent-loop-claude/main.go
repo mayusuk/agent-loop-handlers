@@ -57,8 +57,13 @@ func realMain(args []string, getenv func(string) string, stdout, stderr io.Write
 		return run.Main(contract.StageImplement, rest, getenv, stderr, withFlags(func(r *run.Run, f prompt.Flags) contract.Result {
 			return stage.Implement(context.Background(), r, f, env)
 		}))
-	case "review", "address":
-		return run.Main(contract.Stage(cmd), rest, getenv, stderr, withFlags(notImplemented))
+	case "review":
+		env := stage.Env{Getenv: getenv, Environ: os.Environ()}
+		return run.Main(contract.StageReview, rest, getenv, stderr, withFlags(func(r *run.Run, f prompt.Flags) contract.Result {
+			return stage.Review(context.Background(), r, f, env)
+		}))
+	case "address":
+		return run.Main(contract.StageAddress, rest, getenv, stderr, withFlags(notImplemented))
 	case "mint":
 		return run.Main(contract.StageMint, rest, getenv, stderr, withFlags(mint))
 	case "version":

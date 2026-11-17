@@ -1,5 +1,5 @@
-// Package gitx holds the git operations the coder stages (implement and
-// address) need in a run's workspace: reading the head and branch, and
+// Package gitx holds the git operations the stages need in a run's
+// workspace: reading the head and branch, reading a file at a commit, and
 // pushing a commit to the item's branch with a plain push, never a forced
 // one (plan D4).
 package gitx
@@ -122,6 +122,26 @@ func Dirty(ctx context.Context, dir string) (bool, error) {
 		return false, err
 	}
 	return len(bytes.TrimSpace(out)) > 0, nil
+}
+
+// FileLines returns the number of lines of the file at path in commit,
+// counted as the worker counts them: a last line without a newline still
+// counts. ok is false when path is not a file (a blob) at commit, which
+// includes a missing commit or path and a directory.
+func FileLines(ctx context.Context, dir, commit, path string) (n int, ok bool, err error) {
+	obj := commit + ":" + path
+	if t, err := Git(ctx, dir, "cat-file", "-t", obj); err != nil || strings.TrimSpace(string(t)) != "blob" {
+		return 0, false, nil
+	}
+	data, err := Git(ctx, dir, "cat-file", "blob", obj)
+	if err != nil {
+		return 0, false, err
+	}
+	n = bytes.Count(data, []byte("\n"))
+	if len(data) > 0 && data[len(data)-1] != '\n' {
+		n++
+	}
+	return n, true, nil
 }
 
 // Push pushes commit sha to branch on Remote with a plain push: a push

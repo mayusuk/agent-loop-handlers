@@ -30,8 +30,24 @@ const FailedPrefix = "draft: "
 // contract.MaxFailedReason characters. The result still goes through
 // contract.ValidateResult in run.Finish.
 func Convert(in contract.Input, draftPath, outDir string) contract.Result {
-	res, err := convert(in, draftPath, outDir)
-	if err != nil {
+	return ConvertWith(in, draftPath, outDir, nil)
+}
+
+// Fix changes a parsed done draft before its texts are written, for
+// example to adjust review's new findings (plan D8). An error from it gives
+// a failed result with the error as the reason, without FailedPrefix,
+// since it is not a problem with the draft.
+type Fix func(*Done) error
+
+// ConvertWith is Convert with fix applied to a done draft, if fix is not
+// nil.
+func ConvertWith(in contract.Input, draftPath, outDir string, fix Fix) contract.Result {
+	res, err := convert(in, draftPath, outDir, fix)
+	var fe fixError
+	switch {
+	case errors.As(err, &fe):
+		res = run.Failed(fe.err.Error())
+	case err != nil:
 		res = run.Failed(FailedPrefix + err.Error())
 	}
 	res.ContractVersion = contract.Version
@@ -39,7 +55,12 @@ func Convert(in contract.Input, draftPath, outDir string) contract.Result {
 	return res
 }
 
-func convert(in contract.Input, draftPath, outDir string) (contract.Result, error) {
+// fixError marks an error from a Fix.
+type fixError struct{ err error }
+
+func (e fixError) Error() string { return e.err.Error() }
+
+func convert(in contract.Input, draftPath, outDir string, fix Fix) (contract.Result, error) {
 	data, err := readDraft(draftPath)
 	if err != nil {
 		return contract.Result{}, err
@@ -63,6 +84,11 @@ func convert(in contract.Input, draftPath, outDir string) (contract.Result, erro
 			QuestionFile: w.add("needs-owner-question.md", "needs_owner.question", d.NeedsOwner.Question),
 		}
 	case contract.OutcomeDone:
+		if fix != nil {
+			if err := fix(d.Done); err != nil {
+				return contract.Result{}, fixError{err}
+			}
+		}
 		done, err := convertDone(in, d.Done, w)
 		if err != nil {
 			return contract.Result{}, err

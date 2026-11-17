@@ -131,3 +131,38 @@ func TestPushRejectsBadArguments(t *testing.T) {
 		}
 	}
 }
+
+func TestFileLines(t *testing.T) {
+	ctx := context.Background()
+	ws, _ := clone(t)
+	os.WriteFile(filepath.Join(ws, "n.txt"), []byte("1\n2\n3"), 0o644)
+	os.WriteFile(filepath.Join(ws, "e.txt"), nil, 0o644)
+	os.MkdirAll(filepath.Join(ws, "dir"), 0o755)
+	os.WriteFile(filepath.Join(ws, "dir", "x"), []byte("x\n"), 0o644)
+	run(t, ws, "add", ".")
+	run(t, ws, "commit", "-q", "-m", "files")
+	head := run(t, ws, "rev-parse", "HEAD")
+	for _, c := range []struct {
+		path string
+		n    int
+		ok   bool
+	}{
+		{"n.txt", 3, true},
+		{"dir/x", 1, true},
+		{"e.txt", 0, true},
+		{"missing.txt", 0, false},
+		{"dir", 0, false},
+	} {
+		n, ok, err := FileLines(ctx, ws, head, c.path)
+		if err != nil || n != c.n || ok != c.ok {
+			t.Errorf("FileLines(%s) = %d, %v, %v; want %d, %v", c.path, n, ok, err, c.n, c.ok)
+		}
+	}
+	// A file added after the commit is not in it.
+	os.WriteFile(filepath.Join(ws, "later.txt"), []byte("l\n"), 0o644)
+	run(t, ws, "add", "later.txt")
+	run(t, ws, "commit", "-q", "-m", "later")
+	if _, ok, err := FileLines(ctx, ws, head, "later.txt"); ok || err != nil {
+		t.Errorf("FileLines(later.txt at the earlier commit) = %v, %v; want not a file", ok, err)
+	}
+}
