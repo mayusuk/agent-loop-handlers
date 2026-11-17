@@ -61,3 +61,5 @@ Golden tests for each built-in prompt (and address `base_update`); git tests on 
 ## Outcome
 
 Added `internal/prompt` (`Build`, `Tail`, `ParseFlags`, embedded prompts in `builtin/`, golden files in `testdata/`) and made the stage subcommands accept `--skill`. The stages still return `not implemented`; T5–T7 call `Build` with a draft path and turn its errors into `failed` (D9). Deviation: the steps were merged into two commits, because the override and `--skill` share the git lookup. No follow-up issues: the draft format coupling with T4 (#5) is recorded in D2.
+
+Review round 1: R1 (--skill failed on a symlink or directory prompt file) fixed in 8e59aa4, with D5 widened to say so; R2 (shared rules told review to commit) fixed in 323222f by making the commit rule depend on the stage. No pushbacks.
