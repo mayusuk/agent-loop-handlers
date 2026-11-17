@@ -355,17 +355,72 @@ func TestD5_PromptFileAtTheLimitIsUsed(t *testing.T) {
 	}
 }
 
-func TestD3_SymlinkPromptFileFails(t *testing.T) {
-	r := newRepo(t)
+// pushSymlinkOverride puts the implement prompt file on the base branch as
+// a symlink to a real file.
+func (r *repo) pushSymlinkOverride() {
+	r.t.Helper()
 	r.write("prompts/real.md", "real prompt\n")
 	if err := os.MkdirAll(filepath.Join(r.dir, OverrideDir), 0o755); err != nil {
-		t.Fatal(err)
+		r.t.Fatal(err)
 	}
 	if err := os.Symlink("../../prompts/real.md", filepath.Join(r.dir, OverridePath(contract.StageImplement))); err != nil {
-		t.Fatal(err)
+		r.t.Fatal(err)
 	}
 	r.commit("symlink prompt")
 	r.git("push", "-q", "origin", "main")
+}
+
+// TestD5_SkillIgnoresANonRegularPromptFile: with --skill, a prompt file on
+// the base that is a symlink or a directory is ignored and logged, not a
+// failure (plan D5, D6).
+func TestD5_SkillIgnoresANonRegularPromptFile(t *testing.T) {
+	cases := map[string]func(r *repo){
+		"symlink":   func(r *repo) { r.pushSymlinkOverride() },
+		"directory": func(r *repo) { r.pushOverride(contract.Stage("implement.md/x"), "nested\n") },
+	}
+	for name, setup := range cases {
+		t.Run(name, func(t *testing.T) {
+			r := newRepo(t)
+			setup(r)
+			var log []string
+			o := opts(r, input(contract.StageImplement), &log)
+			o.Skill = "work-issue"
+			p, err := Build(context.Background(), o)
+			if err != nil {
+				t.Fatalf("err = %v, want the ignored file not to matter", err)
+			}
+			if p.Source != SourceSkill {
+				t.Errorf("source = %s, want skill", p.Source)
+			}
+			want := []string{
+				"prompt: .agent-loop/prompts/implement.md on origin/main is ignored: --skill work-issue wins",
+				"prompt: skill work-issue",
+			}
+			if strings.Join(log, "\n") != strings.Join(want, "\n") {
+				t.Errorf("log = %q, want %q", log, want)
+			}
+		})
+	}
+}
+
+// TestD5_SkillStillFailsWithoutTheBaseBranch: --skill does not hide a base
+// branch that can't be read (plan D3).
+func TestD5_SkillStillFailsWithoutTheBaseBranch(t *testing.T) {
+	r := newRepo(t)
+	in := input(contract.StageImplement)
+	in.Repo.BaseBranch = "develop"
+	var log []string
+	o := opts(r, in, &log)
+	o.Skill = "work-issue"
+	_, err := Build(context.Background(), o)
+	if err == nil || !strings.Contains(err.Error(), "cannot read the base branch origin/develop") {
+		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestD3_SymlinkPromptFileFails(t *testing.T) {
+	r := newRepo(t)
+	r.pushSymlinkOverride()
 	var log []string
 	_, err := Build(context.Background(), opts(r, input(contract.StageImplement), &log))
 	if err == nil || !strings.Contains(err.Error(), "is not a regular file") {

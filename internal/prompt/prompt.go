@@ -114,7 +114,12 @@ func Build(ctx context.Context, opts Options) (Prompt, error) {
 		if err := CheckSkill(opts.Skill); err != nil {
 			return Prompt{}, err
 		}
+		// The file is not read, so one that isn't a regular file is
+		// ignored like any other (plan D5).
 		found, _, err := lookup(ctx, dir, ref, path)
+		if errors.Is(err, errNotRegular) {
+			err = nil
+		}
 		if err != nil {
 			return Prompt{}, err
 		}
@@ -280,8 +285,11 @@ func readOverride(ctx context.Context, dir, ref, path string) (text string, foun
 	return string(data), true, nil
 }
 
+// errNotRegular marks a prompt path on the base that is not a regular file.
+var errNotRegular = errors.New("not a regular file")
+
 // lookup finds path on ref with git ls-tree. A path that isn't a regular
-// file is an error (plan D3).
+// file is found, with an error that wraps errNotRegular (plan D3).
 func lookup(ctx context.Context, dir, ref, path string) (found bool, size int64, err error) {
 	if _, err := git(ctx, dir, "rev-parse", "--verify", "--quiet", ref+"^{commit}"); err != nil {
 		return false, 0, fmt.Errorf("cannot read the base branch %s: %v", ref, err)
@@ -301,7 +309,7 @@ func lookup(ctx context.Context, dir, ref, path string) (found bool, size int64,
 		return false, 0, fmt.Errorf("cannot look up prompt file %s on %s: unexpected git output %q", path, ref, entry)
 	}
 	if fields[1] != "blob" || (fields[0] != "100644" && fields[0] != "100755") {
-		return true, 0, fmt.Errorf("prompt file %s on %s is not a regular file (mode %s, %s)", path, ref, fields[0], fields[1])
+		return true, 0, fmt.Errorf("prompt file %s on %s is %w (mode %s, %s)", path, ref, errNotRegular, fields[0], fields[1])
 	}
 	size, err = strconv.ParseInt(fields[3], 10, 64)
 	if err != nil {
