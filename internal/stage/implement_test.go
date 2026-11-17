@@ -120,28 +120,45 @@ type outcome struct {
 // implement runs the implement stage through run.Main with the fake
 // claude running shell and writing draft.
 func (f *fixture) implement(shell, draft string, extra ...string) outcome {
+	return f.runStage(f.input(contract.StageImplement), Implement, shell, draft, extra...)
+}
+
+// input is the stage's input for the fixture's workspace, with an
+// hour-away deadline unless f.deadline is set.
+func (f *fixture) input(stage contract.Stage) contract.Input {
+	deadline := time.Now().Add(time.Hour)
+	if !f.deadline.IsZero() {
+		deadline = f.deadline
+	}
+	identity := "coder"
+	if stage == contract.StageReview {
+		identity = "reviewer"
+	}
+	return contract.Input{
+		ContractVersion: contract.Version,
+		RunID:           "r-1",
+		Stage:           stage,
+		Attempt:         1,
+		Deadline:        deadline.UTC().Format(time.RFC3339),
+		Identity:        identity,
+		Project:         contract.InputProject{Name: "p", Tracker: "github", CodeHost: "github"},
+		Repo:            contract.InputRepo{URL: "https://github.com/o/r", BaseBranch: "main"},
+		Workspace:       contract.Workspace{Path: f.ws, Branch: "agent/1", Head: f.head},
+		Item:            contract.ItemRef{Ref: "1", URL: "https://github.com/o/r/issues/1", Type: "feature"},
+	}
+}
+
+type stageFunc func(context.Context, *run.Run, prompt.Flags, Env) contract.Result
+
+// runStage runs body for in through run.Main with the fake claude running
+// shell and writing draft, and validates the result.
+func (f *fixture) runStage(in contract.Input, body stageFunc, shell, draft string, extra ...string) outcome {
 	t := f.t
 	t.Helper()
 	t.Setenv("FAKECLAUDE_SHELL", shell)
 	t.Setenv("DRAFT", draft)
 	for i := 0; i+1 < len(extra); i += 2 {
 		t.Setenv(extra[i], extra[i+1])
-	}
-	deadline := time.Now().Add(time.Hour)
-	if !f.deadline.IsZero() {
-		deadline = f.deadline
-	}
-	in := contract.Input{
-		ContractVersion: contract.Version,
-		RunID:           "r-1",
-		Stage:           contract.StageImplement,
-		Attempt:         1,
-		Deadline:        deadline.UTC().Format(time.RFC3339),
-		Identity:        "coder",
-		Project:         contract.InputProject{Name: "p", Tracker: "github", CodeHost: "github"},
-		Repo:            contract.InputRepo{URL: "https://github.com/o/r", BaseBranch: "main"},
-		Workspace:       contract.Workspace{Path: f.ws, Branch: "agent/1", Head: f.head},
-		Item:            contract.ItemRef{Ref: "1", URL: "https://github.com/o/r/issues/1", Type: "feature"},
 	}
 	data, err := json.Marshal(in)
 	if err != nil {
@@ -166,8 +183,8 @@ func (f *fixture) implement(shell, draft string, extra ...string) outcome {
 	}
 	getenv := func(k string) string { return vars[k] }
 	var stderr bytes.Buffer
-	code := run.Main(contract.StageImplement, nil, getenv, &stderr, func(r *run.Run) contract.Result {
-		return Implement(context.Background(), r, f.flags, Env{Getenv: getenv, Environ: os.Environ()})
+	code := run.Main(in.Stage, nil, getenv, &stderr, func(r *run.Run) contract.Result {
+		return body(context.Background(), r, f.flags, Env{Getenv: getenv, Environ: os.Environ()})
 	})
 	if code != run.ExitResultWritten {
 		t.Fatalf("exit = %d\n%s", code, stderr.String())

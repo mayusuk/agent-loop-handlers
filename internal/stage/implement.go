@@ -48,7 +48,7 @@ func Implement(ctx context.Context, r *run.Run, f prompt.Flags, env Env) contrac
 		return run.Failed(err.Error())
 	}
 
-	res := agent(ctx, r, f, env)
+	res := agent(ctx, r, f, env, nil)
 	if res.Result != contract.OutcomeDone {
 		return res
 	}
@@ -99,10 +99,11 @@ func checkWorkspace(ctx context.Context, ws contract.Workspace) error {
 	return nil
 }
 
-// agent builds the prompt, runs claude and converts its draft. A claude
+// agent builds the prompt, runs claude and converts its draft, applying
+// fix to a done draft if fix is not nil. A claude
 // that did not end cleanly is failed, whatever draft it left (work plan
 // D5). Usage is set on every result once claude started (work plan D6).
-func agent(ctx context.Context, r *run.Run, f prompt.Flags, env Env) contract.Result {
+func agent(ctx context.Context, r *run.Run, f prompt.Flags, env Env, fix draft.Fix) contract.Result {
 	in := r.Input
 	stopAt, err := claude.StopAt(in.Deadline, f.Margin(claude.DefaultMargin))
 	if err != nil {
@@ -145,7 +146,7 @@ func agent(ctx context.Context, r *run.Run, f prompt.Flags, env Env) contract.Re
 		}
 		return withUsage(run.Failed(err.Error()), out.Usage)
 	}
-	return withUsage(draft.Convert(in, draftPath, r.Out), out.Usage)
+	return withUsage(draft.ConvertWith(in, draftPath, r.Out, fix), out.Usage)
 }
 
 func withUsage(res contract.Result, u *contract.Usage) contract.Result {

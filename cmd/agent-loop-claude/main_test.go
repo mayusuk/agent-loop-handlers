@@ -71,6 +71,17 @@ func TestImplementIsRouted(t *testing.T) {
 	}
 }
 
+// TestReviewIsRouted: review runs the stage, which checks its input
+// before anything else.
+func TestReviewIsRouted(t *testing.T) {
+	e := env(t, "review")
+	var stdout, stderr bytes.Buffer
+	realMain([]string{"review"}, func(k string) string { return e[k] }, &stdout, &stderr)
+	if reason := readFailed(t, e, "review"); reason != "the input has no review object" {
+		t.Errorf("reason = %q", reason)
+	}
+}
+
 func TestD11_MintWritesValidFailed(t *testing.T) {
 	e := env(t, "mint")
 	var stdout, stderr bytes.Buffer
@@ -86,7 +97,7 @@ func TestD11_MintWritesValidFailed(t *testing.T) {
 }
 
 func TestStageStubsWriteNotImplemented(t *testing.T) {
-	for _, s := range []string{"review", "address"} {
+	for _, s := range []string{"address"} {
 		t.Run(s, func(t *testing.T) {
 			e := env(t, s)
 			var stdout, stderr bytes.Buffer
@@ -136,10 +147,10 @@ func TestD7_SkillFlagIsAccepted(t *testing.T) {
 		{"--claude", "/x/claude"}, {"--claude=/x/claude", "--deadline-margin=30s"},
 		{"--deadline-margin", "1m", "--skill", "review-pr"},
 	} {
-		e := env(t, "review")
+		e := env(t, "address")
 		var stdout, stderr bytes.Buffer
-		realMain(append([]string{"review"}, args...), func(k string) string { return e[k] }, &stdout, &stderr)
-		if reason := readFailed(t, e, "review"); reason != "the review stage is not implemented in this release" {
+		realMain(append([]string{"address"}, args...), func(k string) string { return e[k] }, &stdout, &stderr)
+		if reason := readFailed(t, e, "address"); reason != "the address stage is not implemented in this release" {
 			t.Errorf("args %q: reason = %q", args, reason)
 		}
 	}
