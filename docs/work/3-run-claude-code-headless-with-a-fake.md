@@ -3,7 +3,7 @@
 **Issue:** [#3](https://github.com/mayusuk/agent-loop-handlers/issues/3) (feature)
 **Branch:** `issue/3-run-claude-code-headless-with-a-fake`
 **Base:** `origin/main @ c3c001e` (checked before branching)
-**Status:** Draft
+**Status:** Done
 
 ## Summary
 
@@ -32,8 +32,8 @@ Unix only (`Setpgid`, `syscall.Kill`), like the worker's `local` runner; CI runs
 ## Steps
 
 - [x] Fake claude binary and its builder.
-- [ ] `internal/claude`: binary lookup, command line, deadline, usage parsing, run with process-group stop; tests against the fake for every acceptance criterion.
-- [ ] Outcome, verify, ship.
+- [x] `internal/claude`: binary lookup, command line, deadline, usage parsing, run with process-group stop; tests against the fake for every acceptance criterion.
+- [x] Outcome, verify, ship.
 
 ## Acceptance criteria
 
@@ -62,4 +62,6 @@ Standard checks; also `GOOS=linux go build ./...` and `GOOS=darwin go build ./..
 
 ## Outcome
 
-_Filled in before shipping._
+Added `internal/claude` (`Find`, `Args`, `StopAt`, `Run`, `ParseUsage`, `ErrTimeLimit`, `ExitError`, `DefaultMargin`, `DefaultGrace`) and `internal/testing/fakeclaude` with `fakebin.Build`. Tests cover each acceptance criterion against the fake: prompt, workspace, closed stdin, own process group, no skip-permissions flag; a sleeping fake (one that exits on SIGTERM and one that ignores it) is stopped at the stop time with its child and gives `ErrTimeLimit`; usage from the JSON output, and none from empty, malformed or usage-less output; a non-zero exit gives `ExitError` with the code. Also covered: a stop time already passed (no start), a child left after a normal exit is killed, a child holding the output pipe doesn't hang the run, and the caller's own context ending is not reported as a time limit.
+
+No deviations from the approach. Nothing calls `Run` yet: the stage subcommands wire it in T5–T7, and the `--claude` and `--deadline-margin` flags arrive with them. No follow-up issues.
