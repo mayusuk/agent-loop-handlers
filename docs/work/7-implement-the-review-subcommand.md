@@ -24,7 +24,7 @@ Wire the runner (#3), the prompts (#4) and the draft conversion (#5) into the `r
 
 ## Steps
 
-- [ ] `gitx.FileLines` and `draft.ConvertWith`, with tests.
+- [x] `gitx.FileLines` and `draft.ConvertWith`, with tests.
 - [ ] `stage.Review` and the CLI wiring, with end-to-end tests using the fake claude and a bare remote.
 
 ## Acceptance criteria
@@ -36,7 +36,7 @@ Wire the runner (#3), the prompts (#4) and the draft conversion (#5) into the `r
 
 ## Decisions
 
-None yet.
+- **D1** [gap] Plan D8, §5.2 review: a path is "in the commit" when it is a file (a blob) at `review.commit`, and a file's lines are counted as the worker counts them (a last line without a newline counts; an empty file has 0 lines). Why: the handler must agree with the worker's own check, or a finding it keeps would still fail the review.
 
 ## Verification
 
