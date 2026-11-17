@@ -1,0 +1,213 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/mayusuk/agent-loop-handlers/agent-draft.schema.json",
+  "title": "agent-loop-claude agent draft",
+  "description": "The draft an agent writes for agent-loop-claude, which turns it into result.json (docs/agent-draft.md). Validate a draft against $defs/implement, $defs/review or $defs/address.",
+  "$defs": {
+    "implement": {
+      "oneOf": [
+        { "$ref": "#/$defs/implement_done" },
+        { "$ref": "#/$defs/blocked" },
+        { "$ref": "#/$defs/needs_owner" },
+        { "$ref": "#/$defs/failed" }
+      ]
+    },
+    "review": {
+      "oneOf": [
+        { "$ref": "#/$defs/review_done" },
+        { "$ref": "#/$defs/needs_owner" },
+        { "$ref": "#/$defs/failed" }
+      ]
+    },
+    "address": {
+      "oneOf": [
+        { "$ref": "#/$defs/address_done" },
+        { "$ref": "#/$defs/blocked" },
+        { "$ref": "#/$defs/needs_owner" },
+        { "$ref": "#/$defs/failed" }
+      ]
+    },
+
+    "text": { "type": "string", "pattern": "\\S" },
+    "line": { "type": "string", "pattern": "^[^\\r\\n]*\\S[^\\r\\n]*$" },
+    "optional_text": { "type": ["string", "null"] },
+
+    "implement_done": {
+      "type": "object",
+      "required": ["result", "done"],
+      "additionalProperties": false,
+      "properties": {
+        "result": { "const": "done" },
+        "done": {
+          "type": "object",
+          "required": ["change"],
+          "additionalProperties": false,
+          "properties": {
+            "change": {
+              "type": "object",
+              "required": ["title", "body"],
+              "additionalProperties": false,
+              "properties": {
+                "title": { "$ref": "#/$defs/line" },
+                "body": { "$ref": "#/$defs/text" }
+              }
+            }
+          }
+        }
+      }
+    },
+
+    "review_done": {
+      "type": "object",
+      "required": ["result", "done"],
+      "additionalProperties": false,
+      "properties": {
+        "result": { "const": "done" },
+        "done": {
+          "type": "object",
+          "required": ["summary"],
+          "additionalProperties": false,
+          "properties": {
+            "summary": { "$ref": "#/$defs/text" },
+            "rulings": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["finding", "status"],
+                "additionalProperties": false,
+                "properties": {
+                  "finding": { "type": "string", "minLength": 1 },
+                  "status": { "enum": ["open", "partially_addressed", "addressed", "withdrawn"] },
+                  "note": { "$ref": "#/$defs/optional_text" }
+                }
+              }
+            },
+            "manual_rulings": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["comment", "ruling"],
+                "additionalProperties": false,
+                "properties": {
+                  "comment": { "type": "string", "minLength": 1 },
+                  "ruling": { "enum": ["addressed", "open"] },
+                  "note": { "$ref": "#/$defs/optional_text" }
+                }
+              }
+            },
+            "new_findings": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["score", "title", "body"],
+                "additionalProperties": false,
+                "properties": {
+                  "score": { "type": "integer", "minimum": 1, "maximum": 5 },
+                  "path": { "$ref": "#/$defs/optional_text" },
+                  "line": { "type": ["integer", "null"], "minimum": 1 },
+                  "title": { "$ref": "#/$defs/line" },
+                  "body": { "$ref": "#/$defs/text" }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+
+    "reply": {
+      "type": "object",
+      "required": ["kind", "body"],
+      "properties": {
+        "kind": { "enum": ["fixed", "explained", "deferred", "not_valid", "needs_info"] },
+        "deferred_to": { "$ref": "#/$defs/optional_text" },
+        "body": { "$ref": "#/$defs/text" }
+      }
+    },
+
+    "address_done": {
+      "type": "object",
+      "required": ["result", "done"],
+      "additionalProperties": false,
+      "properties": {
+        "result": { "const": "done" },
+        "done": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "replies": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/reply",
+                "required": ["finding"],
+                "properties": { "finding": { "type": "string", "minLength": 1 } },
+                "unevaluatedProperties": false
+              }
+            },
+            "manual_replies": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/reply",
+                "required": ["comment"],
+                "properties": { "comment": { "type": "string", "minLength": 1 } },
+                "unevaluatedProperties": false
+              }
+            }
+          }
+        }
+      }
+    },
+
+    "blocked": {
+      "type": "object",
+      "required": ["result", "blocked"],
+      "additionalProperties": false,
+      "properties": {
+        "result": { "const": "blocked" },
+        "blocked": {
+          "type": "object",
+          "required": ["reason"],
+          "additionalProperties": false,
+          "properties": {
+            "reason": { "$ref": "#/$defs/text" },
+            "dependency": { "$ref": "#/$defs/optional_text" }
+          }
+        }
+      }
+    },
+
+    "needs_owner": {
+      "type": "object",
+      "required": ["result", "needs_owner"],
+      "additionalProperties": false,
+      "properties": {
+        "result": { "const": "needs_owner" },
+        "needs_owner": {
+          "type": "object",
+          "required": ["question"],
+          "additionalProperties": false,
+          "properties": {
+            "question": { "$ref": "#/$defs/text" }
+          }
+        }
+      }
+    },
+
+    "failed": {
+      "type": "object",
+      "required": ["result", "failed"],
+      "additionalProperties": false,
+      "properties": {
+        "result": { "const": "failed" },
+        "failed": {
+          "type": "object",
+          "required": ["reason"],
+          "additionalProperties": false,
+          "properties": {
+            "reason": { "type": "string" }
+          }
+        }
+      }
+    }
+  }
+}
