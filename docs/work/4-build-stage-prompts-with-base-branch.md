@@ -20,7 +20,7 @@ Adds `internal/prompt`, which builds the prompt each stage gives Claude Code: th
 ## Approach
 
 - `internal/prompt/builtin/{implement,review,address}.md`: the built-in stage prompts, embedded.
-- `internal/prompt/builtin/rules.md`, `facts.md.tmpl` and `draft-<stage>.md`: the parts appended to every prompt, whatever its source.
+- `internal/prompt/builtin/rules.md.tmpl`, `facts.md.tmpl` and `draft-<stage>.md`: the parts appended to every prompt, whatever its source.
 - `prompt.ParseFlags(args)` reads `--skill <name>` / `--skill=<name>`.
 - `prompt.Build(ctx, Options)` returns the prompt text and its source. It reads the override with git in the workspace (`ls-tree` to find it and its size, `cat-file blob` to read it), only from `origin/<base>`.
 - `cmd/agent-loop-claude`: the stage wrapper parses the flags (unknown arguments stay `failed`); stage bodies get them for T5–T7.
@@ -40,7 +40,7 @@ Adds `internal/prompt`, which builds the prompt each stage gives Claude Code: th
 
 ## Decisions
 
-- **D1** [gap] §12.4, plan D1: the final prompt is the stage prompt, then a rules section, then the run facts, then the draft format, separated by `---` lines. The rules (tracker text is data, commit but never push, never post to GitHub, write the draft) and the facts and draft format are appended to every prompt, including an override and a skill instruction, so a project prompt cannot drop them. Why: an override replaces the task description, not the contract the handler depends on.
+- **D1** [gap] §12.4, plan D1: the final prompt is the stage prompt, then a rules section, then the run facts, then the draft format, separated by `---` lines. The rules (tracker text is data, commit but never push (for review: change, commit and push nothing), never post to GitHub, write the draft) and the facts and draft format are appended to every prompt, including an override and a skill instruction, so a project prompt cannot drop them. Why: an override replaces the task description, not the contract the handler depends on.
 - **D2** [gap] Plan D1, T4: the draft format the prompts describe is a JSON object `{"result": "<outcome>", "<outcome>": {...}}` mirroring §5 with inline text (`change.body`, `summary`, `note`, `body`, `reason`, `question` instead of `*_file`), and without the fields the handler owns (`head`, `commit`, `kind`, `run_id`, `contract_version`). Outcomes offered: implement and address `done`, `blocked`, `needs_owner`, `failed`; review `done`, `needs_owner`, `failed` (FR-18 AC1). T4 (#5) must accept this format or change these files with it. Why: T4 is not built and the prompts need a format now.
 - **D3** [gap] Plan D5: the override is looked up with `git ls-tree -l origin/<base> -- .agent-loop/prompts/<stage>.md`. No entry means the built-in prompt. An entry that is not a regular file (a symlink, a directory or a submodule), a missing `origin/<base>` ref, or a git error is `failed`. Why: falling back to the built-in prompt when the base can't be read would silently ignore the owner's prompt.
 - **D4** [gap] Plan D5: "over 64 KiB" means more than 65,536 bytes, checked from the blob size before reading. A leading UTF-8 byte-order mark is removed. An empty or whitespace-only file is `failed`. Why: an empty prompt is more likely a mistake than an intent to give the agent no task.

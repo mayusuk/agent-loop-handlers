@@ -497,3 +497,34 @@ func TestD7_ParseFlags(t *testing.T) {
 		}
 	}
 }
+
+// TestD1_CommitRuleDependsOnTheStage: the rules tell implement and address
+// to commit on the branch, and review to change and commit nothing, so a
+// review skill that sees only the rules is not told to commit (plan D1, D4).
+func TestD1_CommitRuleDependsOnTheStage(t *testing.T) {
+	const commit = "Commit your work on the checked-out branch"
+	const noCommit = "Do not change, commit or push anything"
+	cases := map[contract.Stage]bool{
+		contract.StageImplement: true,
+		contract.StageAddress:   true,
+		contract.StageReview:    false,
+	}
+	for stage, commits := range cases {
+		t.Run(string(stage), func(t *testing.T) {
+			tail, err := Tail(Options{Input: input(stage), InputPath: "/run/input.json", DraftPath: "/run/tmp/agent-draft.json"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			rules, _, _ := strings.Cut(tail, Separator)
+			if got := strings.Contains(rules, commit); got != commits {
+				t.Errorf("rules contain %q = %v, want %v:\n%s", commit, got, commits, rules)
+			}
+			if got := strings.Contains(rules, noCommit); got == commits {
+				t.Errorf("rules contain %q = %v, want %v:\n%s", noCommit, got, !commits, rules)
+			}
+			if !strings.Contains(rules, "never push") && !strings.Contains(rules, "commit or push anything") {
+				t.Errorf("rules do not forbid pushing:\n%s", rules)
+			}
+		})
+	}
+}

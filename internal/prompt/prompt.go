@@ -164,13 +164,14 @@ func Build(ctx context.Context, opts Options) (Prompt, error) {
 }
 
 // Tail is the part of every prompt that follows the stage prompt: the
-// rules, the run facts and the draft format (plan D1).
+// rules, whose commit rule depends on the stage, the run facts and the
+// draft format (plan D1).
 func Tail(opts Options) (string, error) {
-	rules, err := builtin.ReadFile("builtin/rules.md")
-	if err != nil {
-		return "", fmt.Errorf("internal error: %v", err)
-	}
 	f := newFacts(opts)
+	rules, err := render("rules.md.tmpl", f)
+	if err != nil {
+		return "", err
+	}
 	facts, err := render("facts.md.tmpl", f)
 	if err != nil {
 		return "", err
@@ -179,7 +180,7 @@ func Tail(opts Options) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	parts := []string{string(rules), facts, draft}
+	parts := []string{rules, facts, draft}
 	for i := range parts {
 		parts[i] = strings.TrimSpace(parts[i])
 	}
