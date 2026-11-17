@@ -60,6 +60,17 @@ func readFailed(t *testing.T, e map[string]string, stage string) string {
 	return r.Failed.Reason
 }
 
+// TestImplementIsRouted: implement runs the stage, which checks the
+// workspace before anything else (work plan #6 D2).
+func TestImplementIsRouted(t *testing.T) {
+	e := env(t, "implement")
+	var stdout, stderr bytes.Buffer
+	realMain([]string{"implement"}, func(k string) string { return e[k] }, &stdout, &stderr)
+	if reason := readFailed(t, e, "implement"); !strings.HasPrefix(reason, "the workspace is not usable: ") {
+		t.Errorf("reason = %q", reason)
+	}
+}
+
 func TestD11_MintWritesValidFailed(t *testing.T) {
 	e := env(t, "mint")
 	var stdout, stderr bytes.Buffer
@@ -75,7 +86,7 @@ func TestD11_MintWritesValidFailed(t *testing.T) {
 }
 
 func TestStageStubsWriteNotImplemented(t *testing.T) {
-	for _, s := range []string{"implement", "review", "address"} {
+	for _, s := range []string{"review", "address"} {
 		t.Run(s, func(t *testing.T) {
 			e := env(t, s)
 			var stdout, stderr bytes.Buffer
@@ -120,10 +131,10 @@ func TestStageArgumentsAreFailed(t *testing.T) {
 // stub stage's own reason is the result (work plan #4 D7).
 func TestD7_SkillFlagIsAccepted(t *testing.T) {
 	for _, args := range [][]string{{"--skill", "work-issue"}, {"--skill=work-issue"}} {
-		e := env(t, "implement")
+		e := env(t, "review")
 		var stdout, stderr bytes.Buffer
-		realMain(append([]string{"implement"}, args...), func(k string) string { return e[k] }, &stdout, &stderr)
-		if reason := readFailed(t, e, "implement"); reason != "the implement stage is not implemented in this release" {
+		realMain(append([]string{"review"}, args...), func(k string) string { return e[k] }, &stdout, &stderr)
+		if reason := readFailed(t, e, "review"); reason != "the review stage is not implemented in this release" {
 			t.Errorf("args %q: reason = %q", args, reason)
 		}
 	}

@@ -3,7 +3,7 @@
 **Issue:** [#6](https://github.com/mayusuk/agent-loop-handlers/issues/6) (feature)
 **Branch:** `issue/6-implement-the-implement-subcommand`
 **Base:** `origin/main @ 6412621` (checked before branching)
-**Status:** Draft
+**Status:** Done
 
 ## Summary
 
@@ -25,7 +25,7 @@ Wire the runner (#3), the prompts (#4) and the draft conversion (#5) into the `i
 ## Steps
 
 - [x] `internal/gitx` with tests against a local bare repository.
-- [ ] `internal/stage` `Implement`, `run` log accessors, and the CLI wiring, with end-to-end tests using the fake claude and a bare remote.
+- [x] `internal/stage` `Implement`, `run` log accessors, and the CLI wiring, with end-to-end tests using the fake claude and a bare remote.
 
 ## Acceptance criteria
 
@@ -54,4 +54,4 @@ None needing the owner.
 
 ## Outcome
 
-_Filled in before shipping._
+Built as planned: `internal/gitx` (head, branch, ancestry, dirty check, plain push with the refusal reason from `--porcelain`), `internal/stage.Implement`, `run.Logf`/`run.Log` (the run log is now serialised, since claude's and git's stdout and stderr copiers share it), and `implement` routed in the CLI. `review` and `address` stay stubs. Tests cover every acceptance criterion against a local bare remote with the fake claude, plus the workspace check, a reset branch, a missing draft and the draft's location. No follow-up issues filed; D7 is open for a later task.
