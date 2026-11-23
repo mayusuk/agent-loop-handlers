@@ -521,12 +521,30 @@ func TestD7_ParseFlags(t *testing.T) {
 		"bad margin":      {[]string{"--deadline-margin", "5"}, `--deadline-margin: invalid duration "5"`},
 		"negative margin": {[]string{"--deadline-margin=-1s"}, "--deadline-margin: -1s is negative"},
 		"margin twice":    {[]string{"--deadline-margin", "1m", "--deadline-margin", "2m"}, "--deadline-margin is given more than once"},
+		"unsandboxed=x":   {[]string{"--unsandboxed=true"}, "--unsandboxed takes no value"},
+		"unsandboxed x2":  {[]string{"--unsandboxed", "--unsandboxed"}, "--unsandboxed is given more than once"},
 	}
 	for name, c := range bad {
 		_, err := ParseFlags(c.args)
 		if err == nil || !strings.Contains(err.Error(), c.want) {
 			t.Errorf("%s: err = %v, want %q", name, err, c.want)
 		}
+	}
+}
+
+// TestPlanT8_ParseFlagsUnsandboxed: --unsandboxed is a bare flag that
+// combines with the others (work plan #9 D3).
+func TestPlanT8_ParseFlagsUnsandboxed(t *testing.T) {
+	f, err := ParseFlags(nil)
+	if err != nil || f.Unsandboxed {
+		t.Fatalf("no flags: %+v, %v", f, err)
+	}
+	f, err = ParseFlags([]string{"--skill", "s", "--unsandboxed", "--claude=/c"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !f.Unsandboxed || f.Skill != "s" || f.Claude != "/c" {
+		t.Errorf("flags = %+v", f)
 	}
 }
 

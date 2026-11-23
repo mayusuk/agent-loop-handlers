@@ -109,6 +109,15 @@ func agent(ctx context.Context, r *run.Run, f prompt.Flags, env Env, fix draft.F
 	if err != nil {
 		return run.Failed(err.Error())
 	}
+	// The sandbox is required unless --unsandboxed; claude never starts
+	// without it (plan T8, D12, TECHNICAL-SPEC §7.2).
+	settings, err := claude.Sandbox(env.Getenv(claude.EnvSettings), f.Unsandboxed)
+	if err != nil {
+		return run.Failed(err.Error())
+	}
+	if settings == "" {
+		r.Logf("%s", claude.UnsandboxedWarning)
+	}
 	bin, err := claude.Find(f.Claude, env.Getenv)
 	if err != nil {
 		return run.Failed(err.Error())
@@ -133,7 +142,7 @@ func agent(ctx context.Context, r *run.Run, f prompt.Flags, env Env, fix draft.F
 
 	out, err := claude.Run(ctx, claude.Options{
 		Bin:    bin,
-		Args:   claude.Args(p.Text, env.Getenv(claude.EnvSettings)),
+		Args:   claude.Args(p.Text, settings),
 		Dir:    in.Workspace.Path,
 		Env:    append(append([]string(nil), env.Environ...), EnvDraft+"="+draftPath),
 		StopAt: stopAt,
