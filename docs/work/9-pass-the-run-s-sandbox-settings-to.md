@@ -23,7 +23,7 @@ The handler now refuses to run Claude Code without the run's sandbox. When `AGEN
 
 ## Steps
 
-- [ ] Add `CheckSettings`/`Sandbox` in `internal/claude` with unit tests.
+- [x] Add `CheckSettings`/`Sandbox` in `internal/claude` with unit tests.
 - [ ] Add `--unsandboxed` to the flags, and use the sandbox check in `stage.agent`, with stage tests for the acceptance criteria.
 
 ## Acceptance criteria
