@@ -121,8 +121,11 @@ type smoke struct {
 	base   string
 	// claudeBin is AGENT_LOOP_CLAUDE_BIN, or "" for PATH.
 	claudeBin string
-	// settings is AGENT_LOOP_CLAUDE_SETTINGS, or "" with unsandboxed.
-	settings    string
+	// settings is AGENT_LOOP_CLAUDE_SETTINGS from the owner, or "".
+	settings string
+	// sandbox writes each stage's TECHNICAL-SPEC §7.2 settings and passes
+	// them in AGENT_LOOP_CLAUDE_SETTINGS (issue #38).
+	sandbox     bool
 	unsandboxed bool
 	// stageEnv adds variables to one stage's handler environment.
 	stageEnv map[contract.Stage][]string
@@ -287,7 +290,12 @@ func (s *smoke) run(in contract.Input) stageRun {
 	cmd := exec.Command(handlerBin, args...)
 	cmd.Dir = in.Workspace.Path
 	cache := filepath.Join(in.Workspace.Path, ".cache")
+	tmp := filepath.Join(dir, "tmp")
+	if err := os.MkdirAll(tmp, 0o700); err != nil {
+		t.Fatal(err)
+	}
 	env := []string{
+		"TMPDIR=" + tmp, // work plan 38 D3
 		run.EnvInput + "=" + inPath,
 		run.EnvResult + "=" + resPath,
 		run.EnvOut + "=" + out,
@@ -302,8 +310,12 @@ func (s *smoke) run(in contract.Input) stageRun {
 	if s.claudeBin != "" {
 		env = append(env, claude.EnvBin+"="+s.claudeBin)
 	}
-	if s.settings != "" {
-		env = append(env, claude.EnvSettings+"="+s.settings)
+	settings := s.settings
+	if s.sandbox {
+		settings = s.stageSettings(in.Workspace.Path, dir)
+	}
+	if settings != "" {
+		env = append(env, claude.EnvSettings+"="+settings)
 	}
 	env = append(env, s.stageEnv[in.Stage]...)
 	cmd.Env = append(handlerEnviron(), env...)
@@ -540,13 +552,29 @@ func (s *smoke) ghCalls() string {
 	return string(data)
 }
 
-// sandboxSettings writes Claude Code settings that turn the sandbox on and
-// make it required, the least agent-loop's local runner gives (plan D12,
-// work plan D4).
-func sandboxSettings(t *testing.T) string {
+// stageSettings writes the stage's sandbox settings (liveSettings) to
+// claude-settings.json in the stage's run directory dir, and returns its
+// path. The paths are the ones run uses: the workspace ws, dir/out,
+// dir/result.json and dir/tmp, and the owner's and the handler's homes.
+func (s *smoke) stageSettings(ws, dir string) string {
+	t := s.t
 	t.Helper()
-	p := filepath.Join(t.TempDir(), "claude-settings.json")
-	writeFile(t, p, `{"sandbox":{"enabled":true,"failIfUnavailable":true}}`+"\n", 0o644)
+	homes := []string{filepath.Join(s.root, "home")}
+	if owner, err := os.UserHomeDir(); err == nil {
+		homes = append([]string{owner}, homes...)
+	}
+	data, err := liveSettings(stagePaths{
+		Workspace:  ws,
+		OutDir:     filepath.Join(dir, "out"),
+		ResultPath: filepath.Join(dir, "result.json"),
+		TempDir:    filepath.Join(dir, "tmp"),
+		Homes:      homes,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := filepath.Join(dir, "claude-settings.json")
+	writeFile(t, p, string(data), 0o644)
 	return p
 }
 

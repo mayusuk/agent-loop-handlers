@@ -45,7 +45,7 @@ func TestPlanT9_LiveSmoke(t *testing.T) {
 	case os.Getenv(claude.EnvSettings) != "":
 		s.settings = os.Getenv(claude.EnvSettings)
 	default:
-		s.settings = sandboxSettings(t)
+		s.sandbox = true
 	}
 	t.Logf("claude: %s; workspaces under %s", s.claudeBin, s.root)
 	defer func() { t.Logf("gh calls:\n%s", s.ghCalls()) }()

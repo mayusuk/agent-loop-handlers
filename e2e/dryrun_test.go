@@ -35,7 +35,7 @@ printf '%s' '{"result":"done","done":{"replies":[{"finding":"F1","kind":"fixed",
 func TestPlanT9_HarnessDryRun(t *testing.T) {
 	s := newSmoke(t)
 	s.claudeBin = fakeClaude
-	s.settings = sandboxSettings(t)
+	s.sandbox = true
 	s.stageEnv[contract.StageImplement] = []string{"FAKECLAUDE_SHELL=" + dryImplement}
 	s.stageEnv[contract.StageReview] = []string{"FAKECLAUDE_SHELL=" + dryReview}
 	s.stageEnv[contract.StageAddress] = []string{"FAKECLAUDE_SHELL=" + dryAddress}
@@ -119,7 +119,7 @@ func TestPlanT9_HandlerGetsNoGitHubCredentials(t *testing.T) {
 
 	s := newSmoke(t)
 	s.claudeBin = fakeClaude
-	s.settings = sandboxSettings(t)
+	s.sandbox = true
 	dump := filepath.Join(s.root, "agent-env.txt")
 	s.stageEnv[contract.StageImplement] = []string{"FAKECLAUDE_SHELL=" + `{ env
 echo "gh-config: $(ls -A "$GH_CONFIG_DIR")"
