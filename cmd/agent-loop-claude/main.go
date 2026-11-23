@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"runtime/debug"
 	"strings"
 
 	"github.com/mayusuk/agent-loop-handlers/internal/prompt"
@@ -18,8 +17,14 @@ import (
 	"github.com/mayusuk/agent-loop/contract"
 )
 
-// version is the release, set with -ldflags "-X main.version=v0.1.0".
-var version string
+// Release is this release of agent-loop-claude, without a leading "v"; its
+// git tag is "v" + Release (work plan #11 D1). CHANGELOG.md and README.md
+// name the same release.
+const Release = "0.1.0"
+
+// version is what `version` reports: Release, unless a build overrides it
+// with -ldflags "-X main.version=...".
+var version = Release
 
 // ExitUsage is the exit code for a command line this program doesn't
 // understand outside a stage run (no subcommand, an unknown one, or a bad
@@ -110,7 +115,7 @@ func printVersion(args []string, stdout, stderr io.Writer) int {
 			return ExitUsage
 		}
 	}
-	v := releaseVersion()
+	v := version
 	if !asJSON {
 		fmt.Fprintf(stdout, "agent-loop-claude %s\ncontract versions: %s\n", v, strings.Join(run.Contracts, ", "))
 		return 0
@@ -125,16 +130,4 @@ func printVersion(args []string, stdout, stderr io.Writer) int {
 	}
 	fmt.Fprintf(stdout, "%s\n", data)
 	return 0
-}
-
-// releaseVersion is the -ldflags version, else the module version Go
-// stamped into the build, else "dev".
-func releaseVersion() string {
-	if version != "" {
-		return version
-	}
-	if bi, ok := debug.ReadBuildInfo(); ok && bi.Main.Version != "" && bi.Main.Version != "(devel)" {
-		return bi.Main.Version
-	}
-	return "dev"
 }

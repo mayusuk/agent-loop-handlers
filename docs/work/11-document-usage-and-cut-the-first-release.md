@@ -1,0 +1,59 @@
+# Work plan: Document usage and cut the first release
+
+**Issue:** [#11](https://github.com/mayusuk/agent-loop-handlers/issues/11) (feature)
+**Branch:** `issue/11-document-usage-and-cut-the-first-release`
+**Base:** `origin/main @ 9c15413` (checked before branching)
+**Status:** Done
+
+## Summary
+
+Document how to install and use `agent-loop-claude`, and prepare its first release, v0.1.0: the README gets install, profile snippets for every stage, prompt overrides and `--skill`, the draft format, the environment variables and the supported contract versions; `CHANGELOG.md` records v0.1.0; `version` reports `0.1.0` with no build flags. The tag and the GitHub release are left to the owner.
+
+## Context
+
+- INTEGRATION-SPEC §12.4 (profile snippet, prompt overrides from the base branch, `--skill`, a release names its contract versions) and TECHNICAL-SPEC §7.1 (the full stage entry: `capabilities`, `runner`, `time_limit`) and §7.2 (`local` vs `local-unsandboxed`).
+- Plan D7 (version prints the release and contracts), D11 (`mint` stub), D12 (sandbox handoff through `AGENT_LOOP_CLAUDE_SETTINGS`), D13 (finding `claude`), D16 (install by `go install ./cmd/agent-loop-claude` from the clone; repository stays private).
+- agent-loop's profile schema requires `stages.implement`, `.review` and `.address`; `mint` is optional.
+- `cmd/agent-loop-claude/main.go`: `version` is set by `-ldflags`, else Go's module build info, else `dev`. A `go install` from a clone gets no ldflags, so today it does not report `0.1.0`.
+- Bug #38 (fixed by PR #40) gave the live test the full §7.2 sandbox settings. Bug #43 is open: the fake `gh`'s `calls.log` is outside the allowed writes, so the sandbox denies its write; the fake `gh` still serves the item and change, so the visible symptom is an empty gh-call log.
+
+## Approach
+
+- `main.go`: `version` defaults to `0.1.0` in source; `-ldflags -X main.version=...` still overrides it. The build-info fallback goes, since it can no longer be reached.
+- A test asserts the default version and contracts, and that `CHANGELOG.md` and `README.md` name the same release and contract versions.
+- README: rewrite the top half (install, profiles for every stage, prompts, environment, versions, releasing), and put a note on the live smoke test section that its gh-call log is empty until #43 is fixed.
+- `CHANGELOG.md`: v0.1.0 with what ships, the known issue #43, and the supported contract.
+
+## Steps
+
+- [x] Make `version` report `0.1.0` by default, with a test.
+- [x] Add `CHANGELOG.md` and update the README; test that they name the release and contracts.
+
+## Acceptance criteria
+
+- `agent-loop-claude version` reports `0.1.0` and contracts `1.0`, and the CHANGELOG and README name the same (§12.4).
+- The README profile snippets match INTEGRATION-SPEC §12.4 and TECHNICAL-SPEC §7.1.
+
+## Decisions
+
+- **D1** [gap] plan T10, D7: `version` prints the release without a leading `v` (`agent-loop-claude 0.1.0`, `{"version":"0.1.0",...}`), and the git tag is `v0.1.0`, as Go module tags need. The release is a constant in `main.go` that `-ldflags -X main.version=...` can still override; a build of `main` between releases reports the last release. Why: `go install` from a clone (D16) gets no ldflags, and the acceptance criterion says `0.1.0`.
+- **D2** [gap] plan T10: the release is an annotated tag `v0.1.0` on the merge commit of this PR, pushed by the owner, plus an optional GitHub release whose notes are the CHANGELOG's v0.1.0 section. The README's "Releasing" section gives the commands. Why: publishing is the owner's call, and D16 keeps the repository private.
+- **D3** [gap] plan T10, T9: the README and CHANGELOG say that in the live smoke test (`AGENT_LOOP_LIVE=1`) the gh-call log is empty until #43 is fixed (the fake `gh`'s `calls.log` is outside the sandbox's allowed writes; the fake `gh` has no `set -e`, so it still serves the item and change and the stages can still end `done`; review R2), and list #43 as a known issue of v0.1.0. #38 (the full §7.2 sandbox settings) was fixed by PR #40 before this shipped, so it is not listed. Why: an owner running the test should know the empty log is a known bug.
+- **D4** [gap] INTEGRATION-SPEC §12.4, TECHNICAL-SPEC §7.1: the README's profile shows all three required stages (`implement`, `review`, `address`) with `runner = "local"`, and leaves `mint` out, since it always returns `failed` in this release (D11).
+
+## Verification
+
+- `go run ./cmd/agent-loop-claude version` and `go install ./cmd/agent-loop-claude && agent-loop-claude version --json` print `0.1.0` and `1.0`.
+
+## Risks and open questions
+
+- None for the owner. The tag push and release are the owner's to do.
+
+## Outcome
+
+- `version` reports `0.1.0` and contract `1.0` with no build flags; `-ldflags -X main.version=...` still overrides it. The unreachable build-info fallback was removed.
+- README: install (D16), a profile with all three required stages, sandbox and `--unsandboxed`, the stage flags, prompt files and `--skill`, the draft format link, the environment variables, contract versions and the releasing steps. The live smoke test section now says its gh-call log is empty until #43 is fixed (#38 was fixed by PR #40 while this was in review).
+- `CHANGELOG.md` with 0.1.0, its contract versions and #43 as a known issue.
+- `TestI12_4_*` tests keep `Release`, the CHANGELOG and the README in step.
+- Not done here, by design: pushing the `v0.1.0` tag and publishing a GitHub release (D2). No follow-up issues filed.
+- Review round 1 (PR #42): R2 reworded the #43 note (the symptom is an empty gh-call log, not a failed run; D3 updated). R3 made the README's sandbox errors and `--unsandboxed` match `internal/claude/sandbox.go`. R4 added `TestI12_4_ReadmeProfileLeavesMintOut`. R1 (macOS CI queued) needed no code change. No pushbacks.
