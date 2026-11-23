@@ -8,7 +8,7 @@ import (
 )
 
 // Usage is the stage subcommands' argument summary.
-const Usage = "[--skill <name>] [--claude <path>] [--deadline-margin <duration>]"
+const Usage = "[--skill <name>] [--claude <path>] [--deadline-margin <duration>] [--unsandboxed]"
 
 // Flags are the stage subcommands' arguments (plan D3, D7, D13).
 type Flags struct {
@@ -21,6 +21,10 @@ type Flags struct {
 	DeadlineMargin time.Duration
 	// MarginSet is true when --deadline-margin was given.
 	MarginSet bool
+	// Unsandboxed is true when --unsandboxed was given: claude may run
+	// without sandbox settings, for runner = "local-unsandboxed" (plan T8,
+	// work plan #9 D3).
+	Unsandboxed bool
 }
 
 // Margin returns the --deadline-margin value, or def when it wasn't given.
@@ -32,14 +36,25 @@ func (f Flags) Margin(def time.Duration) time.Duration {
 }
 
 // ParseFlags reads --skill <name>, --claude <path> and
-// --deadline-margin <duration> (a Go duration, 0 or more), each at most
-// once and each also as --flag=value. Any other argument is an error.
+// --deadline-margin <duration> (a Go duration, 0 or more), each also as
+// --flag=value, and the bare flag --unsandboxed, each at most once. Any
+// other argument is an error.
 func ParseFlags(args []string) (Flags, error) {
 	var f Flags
 	seen := map[string]bool{}
 	for i := 0; i < len(args); i++ {
 		a := args[i]
 		name, value, hasValue := strings.Cut(a, "=")
+		if name == "--unsandboxed" {
+			if hasValue {
+				return Flags{}, errors.New("--unsandboxed takes no value")
+			}
+			if f.Unsandboxed {
+				return Flags{}, errors.New("--unsandboxed is given more than once")
+			}
+			f.Unsandboxed = true
+			continue
+		}
 		var need string
 		switch name {
 		case "--skill":

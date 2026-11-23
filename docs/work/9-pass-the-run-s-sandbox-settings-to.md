@@ -3,7 +3,7 @@
 **Issue:** [#9](https://github.com/mayusuk/agent-loop-handlers/issues/9) (feature)
 **Branch:** `issue/9-pass-the-run-s-sandbox-settings-to`
 **Base:** `origin/main @ b1d71f1` (checked before branching)
-**Status:** Draft
+**Status:** Done
 
 ## Summary
 
@@ -24,7 +24,7 @@ The handler now refuses to run Claude Code without the run's sandbox. When `AGEN
 ## Steps
 
 - [x] Add `CheckSettings`/`Sandbox` in `internal/claude` with unit tests.
-- [ ] Add `--unsandboxed` to the flags, and use the sandbox check in `stage.agent`, with stage tests for the acceptance criteria.
+- [x] Add `--unsandboxed` to the flags, and use the sandbox check in `stage.agent`, with stage tests for the acceptance criteria.
 
 ## Acceptance criteria
 
@@ -50,4 +50,4 @@ None.
 
 ## Outcome
 
-_Filled in before shipping._
+Done as planned. `internal/claude/sandbox.go` checks the settings (D1) and picks the run's sandbox (D2, D3, D5); `--unsandboxed` is parsed in `internal/prompt/flags.go`; `stage.agent` resolves the sandbox before finding or starting claude, so implement and review both use it, and logs the warning (D4). The stage test fixture now supplies valid settings by default. No follow-up issues; the README's flag and environment docs are T10 (#11).

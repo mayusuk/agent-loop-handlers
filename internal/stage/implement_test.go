@@ -177,6 +177,9 @@ func (f *fixture) runStage(in contract.Input, body stageFunc, shell, draft strin
 		run.EnvOut:      out,
 		run.EnvContract: "1.0",
 		claude.EnvBin:   fakeBin,
+		// The local runner's sandbox settings (plan D12); a test unsets
+		// them by passing AGENT_LOOP_CLAUDE_SETTINGS "" in extra.
+		claude.EnvSettings: sandboxSettings(t),
 	}
 	for i := 0; i+1 < len(extra); i += 2 {
 		if strings.HasPrefix(extra[i], "AGENT_LOOP_") {
@@ -200,6 +203,17 @@ func (f *fixture) runStage(in contract.Input, body stageFunc, shell, draft strin
 		t.Fatalf("result invalid: %v\n%s", err, got)
 	}
 	return outcome{res: res, in: in, out: out, stderr: stderr.String()}
+}
+
+// sandboxSettings writes settings that turn the sandbox on and make it
+// required, as agent-loop's local runner does (work plan #9 D1).
+func sandboxSettings(t *testing.T) string {
+	t.Helper()
+	p := filepath.Join(t.TempDir(), "claude-settings.json")
+	if err := os.WriteFile(p, []byte(`{"sandbox":{"enabled":true,"failIfUnavailable":true}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return p
 }
 
 func failedReason(t *testing.T, o outcome) string {

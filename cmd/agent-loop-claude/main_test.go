@@ -120,9 +120,9 @@ func TestFR18AC3_StageMismatchThroughCLI(t *testing.T) {
 
 func TestStageArgumentsAreFailed(t *testing.T) {
 	cases := map[string][]string{
-		`implement: unknown argument "--model" (usage: implement [--skill <name>] [--claude <path>] [--deadline-margin <duration>])`:      {"--model", "x"},
-		`implement: --skill is given more than once (usage: implement [--skill <name>] [--claude <path>] [--deadline-margin <duration>])`: {"--skill", "a", "--skill", "b"},
-		`implement: --skill needs a skill name (usage: implement [--skill <name>] [--claude <path>] [--deadline-margin <duration>])`:      {"--skill"},
+		`implement: unknown argument "--model" (usage: implement [--skill <name>] [--claude <path>] [--deadline-margin <duration>] [--unsandboxed])`:      {"--model", "x"},
+		`implement: --skill is given more than once (usage: implement [--skill <name>] [--claude <path>] [--deadline-margin <duration>] [--unsandboxed])`: {"--skill", "a", "--skill", "b"},
+		`implement: --skill needs a skill name (usage: implement [--skill <name>] [--claude <path>] [--deadline-margin <duration>] [--unsandboxed])`:      {"--skill"},
 	}
 	for want, args := range cases {
 		e := env(t, "implement")

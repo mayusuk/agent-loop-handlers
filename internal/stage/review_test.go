@@ -59,10 +59,10 @@ func (f *fixture) reviewInput() contract.Input {
 }
 
 // review runs the review stage and checks the remote is unchanged (D9).
-func (f *fixture) review(shell, draft string) outcome {
+func (f *fixture) review(shell, draft string, extra ...string) outcome {
 	f.t.Helper()
 	before := f.refs()
-	o := f.runStage(f.reviewInput(), Review, shell, draft)
+	o := f.runStage(f.reviewInput(), Review, shell, draft, extra...)
 	if after := f.refs(); after != before {
 		f.t.Errorf("the remote changed during review:\nbefore:\n%s\nafter:\n%s", before, after)
 	}
