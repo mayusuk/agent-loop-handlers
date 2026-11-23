@@ -89,17 +89,30 @@ func TestPlanT9_GhRefusesOtherCalls(t *testing.T) {
 }
 
 // TestPlanT9_HandlerGetsNoGitHubCredentials: the owner's GitHub tokens,
-// gh login and git config never reach the agent, so a real gh or git run
-// by its path is logged out (work plan D8, INTEGRATION-SPEC §3.1).
+// gh login, git config, ~/.netrc, ssh agent and ~/.ssh never reach the
+// agent, and the real gh is on no directory of its PATH (work plan D8,
+// INTEGRATION-SPEC §3.1).
 func TestPlanT9_HandlerGetsNoGitHubCredentials(t *testing.T) {
 	ownerGh := t.TempDir()
 	writeFile(t, filepath.Join(ownerGh, "hosts.yml"), "github.com:\n  oauth_token: owner-secret\n", 0o600)
 	ownerGit := filepath.Join(t.TempDir(), "gitconfig")
 	writeFile(t, ownerGit, "[credential]\n\thelper = owner-secret\n", 0o644)
+	// The owner's home has a netrc, an ssh key and the claude config.
+	ownerHome := t.TempDir()
+	writeFile(t, filepath.Join(ownerHome, ".netrc"), "machine github.com login owner password owner-secret\n", 0o600)
+	writeFile(t, filepath.Join(ownerHome, ".ssh", "id_ed25519"), "owner-secret\n", 0o600)
+	writeFile(t, filepath.Join(ownerHome, ".gitconfig"), "[credential]\n\thelper = owner-secret\n", 0o644)
+	writeFile(t, filepath.Join(ownerHome, ".claude.json"), "{}\n", 0o600)
+	// The real gh shares a directory with another tool the agent may need.
+	realBin := t.TempDir()
+	writeFile(t, filepath.Join(realBin, "gh"), "#!/bin/sh\necho real-gh owner-secret\n", 0o755)
+	writeFile(t, filepath.Join(realBin, "owner-tool"), "#!/bin/sh\necho owner-tool runs\n", 0o755)
 	for k, v := range map[string]string{
 		"GH_TOKEN": "owner-secret", "GITHUB_TOKEN": "owner-secret",
 		"GH_ENTERPRISE_TOKEN": "owner-secret", "GITHUB_ENTERPRISE_TOKEN": "owner-secret",
 		"GH_HOST": "github.com", "GH_CONFIG_DIR": ownerGh, "GIT_CONFIG_GLOBAL": ownerGit,
+		"SSH_AUTH_SOCK": filepath.Join(ownerHome, "agent.sock"), "HOME": ownerHome,
+		"PATH": realBin + string(os.PathListSeparator) + os.Getenv("PATH"),
 	} {
 		t.Setenv(k, v)
 	}
@@ -108,7 +121,20 @@ func TestPlanT9_HandlerGetsNoGitHubCredentials(t *testing.T) {
 	s.claudeBin = fakeClaude
 	s.settings = sandboxSettings(t)
 	dump := filepath.Join(s.root, "agent-env.txt")
-	s.stageEnv[contract.StageImplement] = []string{"FAKECLAUDE_SHELL=" + `{ env; echo "gh-config: $(ls -A "$GH_CONFIG_DIR")"; echo "gh-path: $(command -v gh)"; echo "git-helper: $(git config --get credential.helper)"; } > '` + dump + `' &&
+	s.stageEnv[contract.StageImplement] = []string{"FAKECLAUDE_SHELL=" + `{ env
+echo "gh-config: $(ls -A "$GH_CONFIG_DIR")"
+echo "gh-path: $(command -v gh)"
+(IFS=:; for d in $PATH; do [ -e "$d/gh" ] && echo "gh-on-path: $d/gh"; done)
+echo "owner-tool: $(owner-tool)"
+echo "git-helper: $(git config --get credential.helper)"
+[ -r ~/.netrc ] && echo "netrc: readable"
+[ -e ~/.ssh ] && echo "ssh-dir: present"
+[ -e ~/.claude.json ] && echo "claude-config: linked"
+git ls-remote https://github.invalid/owner/repo 2>&1 | grep -q "transport 'https' not allowed" && echo "git-https: refused"
+git ls-remote git@github.invalid:owner/repo 2>&1 | grep -q "transport 'ssh' not allowed" && echo "git-ssh: refused"
+$GIT_SSH_COMMAND git@github.invalid true 2>&1 | grep -q "ssh (agent-loop-claude smoke test): refused" && echo "ssh-command: refused"
+true
+} > '` + dump + `' &&
 printf 'package calc\n' > sub.go && git add sub.go && git commit -qm 'Add Sub' &&
 printf '%s' '{"result":"done","done":{"change":{"title":"Add Sub","body":"Adds Sub."}}}' > "$AGENT_LOOP_CLAUDE_DRAFT"`}
 	ws := s.workspace("implement", "-b", branch, "origin/main")
@@ -119,20 +145,36 @@ printf '%s' '{"result":"done","done":{"change":{"title":"Add Sub","body":"Adds S
 		t.Fatal(err)
 	}
 	got := string(data)
-	if strings.Contains(got, "owner-secret") || strings.Contains(got, ownerGh) || strings.Contains(got, ownerGit) {
+	if strings.Contains(got, "owner-secret") || strings.Contains(got, ownerGh) || strings.Contains(got, ownerGit) ||
+		strings.Contains(got, ownerHome) || strings.Contains(got, realBin) {
 		t.Errorf("the owner's GitHub credentials reached the agent:\n%s", got)
 	}
-	for _, k := range []string{"GH_TOKEN", "GITHUB_TOKEN", "GH_ENTERPRISE_TOKEN", "GITHUB_ENTERPRISE_TOKEN", "GH_HOST"} {
+	for _, k := range []string{"GH_TOKEN", "GITHUB_TOKEN", "GH_ENTERPRISE_TOKEN", "GITHUB_ENTERPRISE_TOKEN", "GH_HOST", "SSH_AUTH_SOCK"} {
 		if strings.Contains("\n"+got, "\n"+k+"=") {
 			t.Errorf("%s reached the agent", k)
 		}
 	}
+	if n := strings.Count("\n"+got, "\ngh-on-path: "); n != 1 {
+		t.Errorf("agent PATH has %d gh, want only the fake one:\n%s", n, got)
+	}
+	for _, bad := range []string{"\nnetrc: readable\n", "\nssh-dir: present\n"} {
+		if strings.Contains("\n"+got, bad) {
+			t.Errorf("agent environment has %q:\n%s", strings.TrimSpace(bad), got)
+		}
+	}
 	for _, want := range []string{
+		"\nHOME=" + filepath.Join(s.root, "home") + "\n",
 		"\nGH_CONFIG_DIR=" + filepath.Join(s.root, "gh-config") + "\n",
 		"\ngh-config: \n",
 		"\ngh-path: " + filepath.Join(s.ghDir, "gh") + "\n",
+		"\ngh-on-path: " + filepath.Join(s.ghDir, "gh") + "\n",
+		"\nowner-tool: owner-tool runs\n",
 		"\ngit-helper: \n",
+		"\nclaude-config: linked\n",
 		"\nGIT_CONFIG_NOSYSTEM=1\n",
+		"\ngit-https: refused\n",
+		"\ngit-ssh: refused\n",
+		"\nssh-command: refused\n",
 	} {
 		if !strings.Contains("\n"+got, want) {
 			t.Errorf("agent environment lacks %q:\n%s", strings.TrimSpace(want), got)

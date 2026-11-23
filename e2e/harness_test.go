@@ -126,6 +126,8 @@ type smoke struct {
 	unsandboxed bool
 	// stageEnv adds variables to one stage's handler environment.
 	stageEnv map[contract.Stage][]string
+	// isolated is noGitHub's environment, built on the first run.
+	isolated []string
 }
 
 func git(t *testing.T, dir string, args ...string) string {
@@ -290,7 +292,6 @@ func (s *smoke) run(in contract.Input) stageRun {
 		run.EnvResult + "=" + resPath,
 		run.EnvOut + "=" + out,
 		run.EnvContract + "=" + contract.Version,
-		"PATH=" + s.ghDir + string(os.PathListSeparator) + os.Getenv("PATH"),
 		"GOCACHE=" + filepath.Join(cache, "go-build"),
 		"GOTMPDIR=" + filepath.Join(cache, "tmp"),
 	}
@@ -325,17 +326,20 @@ func (s *smoke) run(in contract.Input) stageRun {
 
 // handlerEnviron is the test's environment without the variables the
 // harness sets, so a stray one in the owner's shell can't change a run.
-// It also drops every GH_* and GITHUB_* variable (GH_TOKEN, GITHUB_TOKEN,
-// GH_ENTERPRISE_TOKEN, GH_HOST, ...) and git's own config locations, so
-// no GitHub credential reaches the handler (work plan D8,
-// INTEGRATION-SPEC §3.1).
+// It also drops everything that could carry or find a GitHub credential
+// (work plan D8, INTEGRATION-SPEC §3.1): every GH_* and GITHUB_* variable
+// (GH_TOKEN, GITHUB_TOKEN, GH_ENTERPRISE_TOKEN, GH_HOST, ...), every GIT_*
+// variable, the ssh agent (SSH_AUTH_SOCK, ...), HOME and the XDG_*
+// directories, and curl's NETRC and CURL_HOME. noGitHub sets its own.
 func handlerEnviron() []string {
 	var env []string
 	for _, kv := range os.Environ() {
 		k, _, _ := strings.Cut(kv, "=")
 		if strings.HasPrefix(k, "AGENT_LOOP_") || strings.HasPrefix(k, "FAKECLAUDE_") ||
 			strings.HasPrefix(k, "GH_") || strings.HasPrefix(k, "GITHUB_") ||
-			strings.HasPrefix(k, "GIT_CONFIG") ||
+			strings.HasPrefix(k, "GIT_") || strings.HasPrefix(k, "SSH_") ||
+			strings.HasPrefix(k, "XDG_") ||
+			k == "HOME" || k == "NETRC" || k == "CURL_HOME" ||
 			k == "PATH" || k == "GOCACHE" || k == "GOTMPDIR" {
 			continue
 		}
@@ -344,24 +348,109 @@ func handlerEnviron() []string {
 	return env
 }
 
-// noGitHub is the environment that keeps a real gh or git, if the agent
-// runs one by its path, logged out (work plan D8): gh reads its login from
-// an empty GH_CONFIG_DIR, and git reads no global or system config, so no
-// credential helper hands it the owner's GitHub login. HOME stays, since
-// the real claude keeps its own login there.
+// homeLinks are the only parts of the owner's home the handler's HOME
+// links to: the real claude's config and login. On macOS that login is in
+// the login keychain, which security finds under ~/Library/Keychains.
+var homeLinks = []string{".claude", ".claude.json", filepath.Join("Library", "Keychains")}
+
+// noGitHub is the environment that keeps the owner's GitHub login out of
+// the handler's reach (work plan D8), built once per smoke run:
+//
+//   - PATH has the fake gh first, and no directory with the real gh: a
+//     directory of the owner's PATH that holds a gh is replaced by one of
+//     symlinks to everything else in it, so git, go and claude still run.
+//   - HOME is a new directory that links only homeLinks, so ~/.netrc,
+//     ~/.ssh, ~/.gitconfig, ~/.git-credentials and ~/.config/gh are not
+//     there; GH_CONFIG_DIR is an empty directory.
+//   - git reads no global or system config (so no credential helper),
+//     speaks only the file protocol (so it never runs curl, which reads
+//     ~/.netrc, or ssh), and GIT_SSH_COMMAND refuses; SSH_AUTH_SOCK is
+//     unset by handlerEnviron.
 func (s *smoke) noGitHub() []string {
 	s.t.Helper()
+	if s.isolated != nil {
+		return s.isolated
+	}
 	cfg := filepath.Join(s.root, "gh-config")
 	if err := os.MkdirAll(cfg, 0o700); err != nil {
 		s.t.Fatal(err)
 	}
 	empty := filepath.Join(s.root, "gitconfig-empty")
 	writeFile(s.t, empty, "", 0o644)
-	return []string{
+	refuse := filepath.Join(s.root, "no-ssh")
+	writeFile(s.t, refuse, "#!/bin/sh\necho 'ssh (agent-loop-claude smoke test): refused, there is no GitHub here.' >&2\nexit 1\n", 0o755)
+	s.isolated = []string{
+		"PATH=" + s.handlerPath(),
+		"HOME=" + s.handlerHome(),
 		"GH_CONFIG_DIR=" + cfg,
 		"GIT_CONFIG_GLOBAL=" + empty,
 		"GIT_CONFIG_NOSYSTEM=1",
+		"GIT_ALLOW_PROTOCOL=file",
+		"GIT_SSH_COMMAND=" + refuse,
+		"GIT_TERMINAL_PROMPT=0",
 	}
+	return s.isolated
+}
+
+// handlerPath is the fake gh's directory, then the owner's PATH with
+// every directory that holds a gh replaced by a mirror without it.
+func (s *smoke) handlerPath() string {
+	s.t.Helper()
+	dirs := []string{s.ghDir}
+	for i, d := range filepath.SplitList(os.Getenv("PATH")) {
+		if d == "" || d == s.ghDir {
+			continue
+		}
+		if _, err := os.Lstat(filepath.Join(d, "gh")); err != nil {
+			dirs = append(dirs, d)
+			continue
+		}
+		entries, err := os.ReadDir(d)
+		if err != nil {
+			s.t.Fatal(err)
+		}
+		mirror := filepath.Join(s.root, "path", fmt.Sprint(i))
+		if err := os.MkdirAll(mirror, 0o755); err != nil {
+			s.t.Fatal(err)
+		}
+		for _, e := range entries {
+			if e.Name() == "gh" {
+				continue
+			}
+			if err := os.Symlink(filepath.Join(d, e.Name()), filepath.Join(mirror, e.Name())); err != nil {
+				s.t.Fatal(err)
+			}
+		}
+		dirs = append(dirs, mirror)
+	}
+	return strings.Join(dirs, string(os.PathListSeparator))
+}
+
+// handlerHome is a new HOME that links only homeLinks from the owner's.
+func (s *smoke) handlerHome() string {
+	s.t.Helper()
+	home := filepath.Join(s.root, "home")
+	if err := os.MkdirAll(home, 0o700); err != nil {
+		s.t.Fatal(err)
+	}
+	owner, err := os.UserHomeDir()
+	if err != nil {
+		return home
+	}
+	for _, rel := range homeLinks {
+		src := filepath.Join(owner, rel)
+		if _, err := os.Lstat(src); err != nil {
+			continue
+		}
+		dst := filepath.Join(home, rel)
+		if err := os.MkdirAll(filepath.Dir(dst), 0o700); err != nil {
+			s.t.Fatal(err)
+		}
+		if err := os.Symlink(src, dst); err != nil {
+			s.t.Fatal(err)
+		}
+	}
+	return home
 }
 
 // tail is the end of a run log, enough to see why a stage went wrong.

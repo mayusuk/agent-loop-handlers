@@ -47,7 +47,10 @@ findings, with the real Claude Code. It builds `agent-loop-claude`, seeds a smal
 bare local remote, and plays the worker: a fresh clone per stage, `input.json` written as the
 worker writes it, and each `result.json` checked with `contract.ValidateResult`. Every stage must
 end `done`, and each pushed head must be on the bare remote. It never calls GitHub: a fake `gh` on
-`PATH` serves the item and the change, and refuses every other call.
+`PATH` serves the item and the change, and refuses every other call. The agent gets none of your
+GitHub credentials: no `GH_*`/`GITHUB_*` tokens, no real `gh` on its `PATH`, a fresh `HOME` that
+links only `~/.claude`, `~/.claude.json` and (on macOS) `~/Library/Keychains` for claude's login,
+no ssh agent, and a git that speaks only to local paths.
 
 It is skipped unless `AGENT_LOOP_LIVE=1`, so CI and the normal checks never run it. To run it, have
 `claude` installed and logged in, then:
