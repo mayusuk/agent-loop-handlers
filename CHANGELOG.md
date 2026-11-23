@@ -28,7 +28,6 @@ Contract versions: 1.0
 
 ### Known issues
 
-- [#38](https://github.com/mayusuk/agent-loop-handlers/issues/38): the live smoke test's sandbox
-  settings lack TECHNICAL-SPEC §7.2's read denials and egress allowlist. Do not run the live test
-  until it is fixed. This affects only the test: under agent-loop, the `local` runner writes the
-  sandbox settings.
+- [#43](https://github.com/mayusuk/agent-loop-handlers/issues/43): the live smoke test
+  (`AGENT_LOOP_LIVE=1`) is expected to fail until it is fixed: the fake `gh` writes its `calls.log`
+  outside the sandbox's allowed write paths. This affects only the test, not the handler.

@@ -189,11 +189,10 @@ Work is planned and tracked with the plan-work / work-issue workflow (`.wf.toml`
 
 ### Live smoke test
 
-> **Do not run the live smoke test yet.** Bug
-> [#38](https://github.com/mayusuk/agent-loop-handlers/issues/38): the sandbox settings the test
-> writes only turn the sandbox on. They lack TECHNICAL-SPEC §7.2's read denials and egress
-> allowlist, so a sandboxed agent can still read `~/.netrc` and reach your `gh` login through the
-> real `gh`. Wait until #38 is fixed before setting `AGENT_LOOP_LIVE=1`.
+> **Expect the live smoke test to fail for now.** Bug
+> [#43](https://github.com/mayusuk/agent-loop-handlers/issues/43): the fake `gh` writes its
+> `calls.log` outside the sandbox's allowed write paths, so a sandboxed live run is expected to fail
+> until #43 is fixed. The sandbox settings themselves are the full TECHNICAL-SPEC §7.2 set (#38).
 
 `e2e/live_test.go` runs `implement`, then `review` on the pushed head, then `address` on the
 findings, with the real Claude Code. It builds `agent-loop-claude`, seeds a small Go module in a
