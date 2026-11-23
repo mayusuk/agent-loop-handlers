@@ -56,3 +56,4 @@ Document how to install and use `agent-loop-claude`, and prepare its first relea
 - `CHANGELOG.md` with 0.1.0, its contract versions and #43 as a known issue.
 - `TestI12_4_*` tests keep `Release`, the CHANGELOG and the README in step.
 - Not done here, by design: pushing the `v0.1.0` tag and publishing a GitHub release (D2). No follow-up issues filed.
+- Review round 1 (PR #42): R2 reworded the #43 note (the symptom is an empty gh-call log, not a failed run; D3 updated). R3 made the README's sandbox errors and `--unsandboxed` match `internal/claude/sandbox.go`. R4 added `TestI12_4_ReadmeProfileLeavesMintOut`. R1 (macOS CI queued) needed no code change. No pushbacks.
