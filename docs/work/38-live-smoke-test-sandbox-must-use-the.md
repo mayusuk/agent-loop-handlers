@@ -24,7 +24,7 @@ The live smoke test's default sandbox settings only turned the sandbox on, so a 
 ## Steps
 
 - [x] Add `TestT7_2_LiveSandboxSettings`, which fails against the old settings, and the generator that makes it pass; use it in `run`.
-- [ ] Correct the README and work plan 10 D4 and D8.
+- [x] Correct the README and work plan 10 D4 and D8.
 
 ## Acceptance criteria
 

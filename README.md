@@ -62,9 +62,13 @@ AGENT_LOOP_LIVE=1 go test -count=1 -timeout 90m -run TestPlanT9_LiveSmoke -v ./e
 It spends real Claude usage (three headless sessions). Each stage gets a 20-minute deadline.
 
 - `AGENT_LOOP_CLAUDE_BIN`: the `claude` binary to use; otherwise `claude` on `PATH`.
-- By default claude runs in Claude Code's sandbox, with settings the test writes
-  (`sandbox.enabled` and `sandbox.failIfUnavailable` true). `AGENT_LOOP_CLAUDE_SETTINGS=<file>`
-  uses your own settings file instead.
+- By default claude runs in Claude Code's sandbox, with the settings TECHNICAL-SPEC §7.2 gives the
+  `local` runner, written for each stage to `run-<stage>/claude-settings.json`: the sandbox on and
+  required, no command outside it, writes only to the stage's workspace, out directory, result and
+  temp directory, reads of `~/.netrc`, `~/.ssh`, `~/.config/gh`, `~/Library/Keychains` and the
+  other credential stores denied, and network access only to the Anthropic API and the package
+  registries (no GitHub host, no loopback). `AGENT_LOOP_CLAUDE_SETTINGS=<file>` uses your own
+  settings file instead; it then is your job to make it as strict.
 - `AGENT_LOOP_LIVE_UNSANDBOXED=1` passes `--unsandboxed` instead, for a machine without the
   sandbox. Claude then has your full user access.
 
