@@ -166,3 +166,27 @@ func TestFileLines(t *testing.T) {
 		t.Errorf("FileLines(later.txt at the earlier commit) = %v, %v; want not a file", ok, err)
 	}
 }
+
+func TestParents(t *testing.T) {
+	ctx := context.Background()
+	ws, _ := clone(t)
+	base := run(t, ws, "rev-parse", "HEAD")
+	if p, err := Parents(ctx, ws, base); err != nil || len(p) != 0 {
+		t.Fatalf("root Parents = %v, %v", p, err)
+	}
+	a := commit(t, ws, "a")
+	run(t, ws, "checkout", "-q", "-b", "side", base)
+	b := commit(t, ws, "b")
+	run(t, ws, "checkout", "-q", "agent/1")
+	run(t, ws, "merge", "-q", "--no-edit", "side")
+	m := run(t, ws, "rev-parse", "HEAD")
+	if p, err := Parents(ctx, ws, a); err != nil || len(p) != 1 || p[0] != base {
+		t.Errorf("Parents(a) = %v, %v, want [%s]", p, err, base)
+	}
+	if p, err := Parents(ctx, ws, m); err != nil || len(p) != 2 || p[0] != a || p[1] != b {
+		t.Errorf("Parents(merge) = %v, %v, want [%s %s]", p, err, a, b)
+	}
+	if _, err := Parents(ctx, ws, "0123456789012345678901234567890123456789"); err == nil {
+		t.Errorf("Parents of a missing commit gave no error")
+	}
+}

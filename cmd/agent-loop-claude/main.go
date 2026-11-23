@@ -63,7 +63,10 @@ func realMain(args []string, getenv func(string) string, stdout, stderr io.Write
 			return stage.Review(context.Background(), r, f, env)
 		}))
 	case "address":
-		return run.Main(contract.StageAddress, rest, getenv, stderr, withFlags(notImplemented))
+		env := stage.Env{Getenv: getenv, Environ: os.Environ()}
+		return run.Main(contract.StageAddress, rest, getenv, stderr, withFlags(func(r *run.Run, f prompt.Flags) contract.Result {
+			return stage.Address(context.Background(), r, f, env)
+		}))
 	case "mint":
 		return run.Main(contract.StageMint, rest, getenv, stderr, withFlags(mint))
 	case "version":
@@ -90,10 +93,6 @@ func withFlags(body stageBody) run.Body {
 		}
 		return body(r, f)
 	}
-}
-
-func notImplemented(r *run.Run, _ prompt.Flags) contract.Result {
-	return run.Failed(fmt.Sprintf("the %s stage is not implemented in this release", r.Stage))
 }
 
 func mint(*run.Run, prompt.Flags) contract.Result {
