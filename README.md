@@ -189,10 +189,12 @@ Work is planned and tracked with the plan-work / work-issue workflow (`.wf.toml`
 
 ### Live smoke test
 
-> **Expect the live smoke test to fail for now.** Bug
+> **Expect an empty gh-call log for now.** Bug
 > [#43](https://github.com/mayusuk/agent-loop-handlers/issues/43): the fake `gh` writes its
-> `calls.log` outside the sandbox's allowed write paths, so a sandboxed live run is expected to fail
-> until #43 is fixed. The sandbox settings themselves are the full TECHNICAL-SPEC §7.2 set (#38).
+> `calls.log` outside the sandbox's allowed write paths. The sandbox denies the write, but the fake
+> `gh` still serves the item and the change, so the stages can still end `done`; the "gh calls" the
+> test logs at the end will be empty until #43 is fixed. The sandbox settings themselves are the
+> full TECHNICAL-SPEC §7.2 set (#38).
 
 `e2e/live_test.go` runs `implement`, then `review` on the pushed head, then `address` on the
 findings, with the real Claude Code. It builds `agent-loop-claude`, seeds a small Go module in a

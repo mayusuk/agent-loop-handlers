@@ -28,6 +28,7 @@ Contract versions: 1.0
 
 ### Known issues
 
-- [#43](https://github.com/mayusuk/agent-loop-handlers/issues/43): the live smoke test
-  (`AGENT_LOOP_LIVE=1`) is expected to fail until it is fixed: the fake `gh` writes its `calls.log`
-  outside the sandbox's allowed write paths. This affects only the test, not the handler.
+- [#43](https://github.com/mayusuk/agent-loop-handlers/issues/43): in the live smoke test
+  (`AGENT_LOOP_LIVE=1`) the fake `gh` writes its `calls.log` outside the sandbox's allowed write
+  paths. The write is denied but the fake `gh` still serves the item and the change, so the log of
+  gh calls is empty until #43 is fixed. This affects only the test, not the handler.
