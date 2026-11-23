@@ -39,3 +39,37 @@ gofmt -l . && go vet ./... && go build ./... && go test -race -count=1 ./...
 
 Tests use a fake `claude` binary, so they need no API key and no network.
 Work is planned and tracked with the plan-work / work-issue workflow (`.wf.toml`).
+
+### Live smoke test
+
+`e2e/live_test.go` runs `implement`, then `review` on the pushed head, then `address` on the
+findings, with the real Claude Code. It builds `agent-loop-claude`, seeds a small Go module in a
+bare local remote, and plays the worker: a fresh clone per stage, `input.json` written as the
+worker writes it, and each `result.json` checked with `contract.ValidateResult`. Every stage must
+end `done`, and each pushed head must be on the bare remote. It never calls GitHub: a fake `gh` on
+`PATH` serves the item and the change, and refuses every other call. The agent gets none of your
+GitHub credentials: no `GH_*`/`GITHUB_*` tokens, no real `gh` on its `PATH`, a fresh `HOME` that
+links only `~/.claude`, `~/.claude.json` and (on macOS) `~/Library/Keychains` for claude's login,
+no ssh agent, and a git that speaks only to local paths.
+
+It is skipped unless `AGENT_LOOP_LIVE=1`, so CI and the normal checks never run it. To run it, have
+`claude` installed and logged in, then:
+
+```sh
+AGENT_LOOP_LIVE=1 go test -count=1 -timeout 90m -run TestPlanT9_LiveSmoke -v ./e2e/
+```
+
+It spends real Claude usage (three headless sessions). Each stage gets a 20-minute deadline.
+
+- `AGENT_LOOP_CLAUDE_BIN`: the `claude` binary to use; otherwise `claude` on `PATH`.
+- By default claude runs in Claude Code's sandbox, with settings the test writes
+  (`sandbox.enabled` and `sandbox.failIfUnavailable` true). `AGENT_LOOP_CLAUDE_SETTINGS=<file>`
+  uses your own settings file instead.
+- `AGENT_LOOP_LIVE_UNSANDBOXED=1` passes `--unsandboxed` instead, for a machine without the
+  sandbox. Claude then has your full user access.
+
+With `-v` the test logs each stage's time and, at the end, the `gh` calls the agent made. A failing
+stage prints the end of its run log.
+
+`TestPlanT9_HarnessDryRun` runs the same flow with the fake `claude` in every `go test`, so the
+harness itself stays tested.
