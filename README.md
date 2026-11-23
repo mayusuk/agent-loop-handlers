@@ -88,9 +88,10 @@ in this release it always returns `failed` with the reason `mint is not supporte
 With `runner = "local"`, agent-loop writes Claude Code sandbox settings for each run and passes
 their path in `AGENT_LOOP_CLAUDE_SETTINGS`. `agent-loop-claude` hands them to `claude` with
 `--settings`, runs it with `--permission-mode acceptEdits`, and never with
-`--dangerously-skip-permissions` (plan D12, TECHNICAL-SPEC §7.2). It refuses to start (`failed: no
-sandbox settings`) when the settings are missing or don't set `sandbox.enabled` and
-`sandbox.failIfUnavailable` to true.
+`--dangerously-skip-permissions` (plan D12, TECHNICAL-SPEC §7.2). It refuses to start, with a `failed`
+result, when the settings are missing (`no sandbox settings: AGENT_LOOP_CLAUDE_SETTINGS is not
+set`) or don't set both `sandbox.enabled` and `sandbox.failIfUnavailable` to true (`sandbox
+settings <path>: sandbox.enabled is not true`, or the same for `sandbox.failIfUnavailable`).
 
 To run without the sandbox, set `runner = "local-unsandboxed"` and add `--unsandboxed` to the
 command. Claude then has your full user access: your files, any network address and agent-loop's
@@ -105,7 +106,7 @@ Every stage subcommand takes the same flags, after the subcommand name in `comma
 | `--skill <name>` | Run the named Claude Code skill instead of the stage prompt (see below) |
 | `--claude <path>` | The `claude` binary to run |
 | `--deadline-margin <duration>` | Stop `claude` this long before the run's deadline, so a result is still written. A Go duration; default `2m` |
-| `--unsandboxed` | Run `claude` without sandbox settings. Only for `runner = "local-unsandboxed"` |
+| `--unsandboxed` | Allow running `claude` when `AGENT_LOOP_CLAUDE_SETTINGS` is not set. If it is set, the settings are still checked and passed. Only for `runner = "local-unsandboxed"` |
 
 ## Prompts
 
