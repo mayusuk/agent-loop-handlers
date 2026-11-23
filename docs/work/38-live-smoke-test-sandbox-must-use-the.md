@@ -3,7 +3,7 @@
 **Issue:** [#38](https://github.com/mayusuk/agent-loop-handlers/issues/38) (bug)
 **Branch:** `issue/38-live-smoke-test-sandbox-must-use-the`
 **Base:** `origin/main @ 9c15413` (checked before branching)
-**Status:** Draft
+**Status:** Done
 
 ## Summary
 
@@ -50,4 +50,4 @@ The live smoke test's default sandbox settings only turned the sandbox on, so a 
 
 ## Outcome
 
-_Filled in before shipping._
+The harness writes each stage's §7.2 settings (`e2e/sandbox_test.go`, `liveSettings`, a copy of agent-loop's `runners.Settings` shape) and passes them to the handler; `TestT7_2_LiveSandboxSettings` asserts them, and the dry runs pass them through the handler's `CheckSettings`. README and work plan 10 D4, D8 corrected. Deviation: the step-1 test could not fail against the old code on its own, since the generator it calls is new; it fails on the old settings' content (no denials, unsandboxed commands allowed). The live test was not run. No follow-up issues.
