@@ -3,7 +3,7 @@
 **Issue:** [#11](https://github.com/mayusuk/agent-loop-handlers/issues/11) (feature)
 **Branch:** `issue/11-document-usage-and-cut-the-first-release`
 **Base:** `origin/main @ 9c15413` (checked before branching)
-**Status:** Draft
+**Status:** Done
 
 ## Summary
 
@@ -27,7 +27,7 @@ Document how to install and use `agent-loop-claude`, and prepare its first relea
 ## Steps
 
 - [x] Make `version` report `0.1.0` by default, with a test.
-- [ ] Add `CHANGELOG.md` and update the README; test that they name the release and contracts.
+- [x] Add `CHANGELOG.md` and update the README; test that they name the release and contracts.
 
 ## Acceptance criteria
 
@@ -51,4 +51,8 @@ Document how to install and use `agent-loop-claude`, and prepare its first relea
 
 ## Outcome
 
-_Filled in before shipping._
+- `version` reports `0.1.0` and contract `1.0` with no build flags; `-ldflags -X main.version=...` still overrides it. The unreachable build-info fallback was removed.
+- README: install (D16), a profile with all three required stages, sandbox and `--unsandboxed`, the stage flags, prompt files and `--skill`, the draft format link, the environment variables, contract versions and the releasing steps. The live smoke test section now says not to run it until #38 is fixed.
+- `CHANGELOG.md` with 0.1.0, its contract versions and #38 as a known issue.
+- `TestI12_4_*` tests keep `Release`, the CHANGELOG and the README in step.
+- Not done here, by design: pushing the `v0.1.0` tag and publishing a GitHub release (D2). No follow-up issues filed.
