@@ -271,3 +271,26 @@ func TestBinaryExitCodes(t *testing.T) {
 		t.Errorf("version --json: exit = %d, out = %q", code, out)
 	}
 }
+
+// TestI12_4_VersionIsTheRelease: a plain build (no -ldflags), as `go
+// install` from the clone makes, reports release 0.1.0 and contract 1.0
+// (work plan #11 D1).
+func TestI12_4_VersionIsTheRelease(t *testing.T) {
+	if Release != "0.1.0" || version != Release {
+		t.Fatalf("Release = %q, version = %q, want 0.1.0", Release, version)
+	}
+	var stdout, stderr bytes.Buffer
+	if code := realMain([]string{"version"}, os.Getenv, &stdout, &stderr); code != 0 {
+		t.Fatalf("exit = %d; stderr:\n%s", code, stderr.String())
+	}
+	if got, want := stdout.String(), "agent-loop-claude 0.1.0\ncontract versions: 1.0\n"; got != want {
+		t.Errorf("stdout = %q, want %q", got, want)
+	}
+	stdout.Reset()
+	if code := realMain([]string{"version", "--json"}, os.Getenv, &stdout, &stderr); code != 0 {
+		t.Fatalf("exit = %d; stderr:\n%s", code, stderr.String())
+	}
+	if got, want := strings.TrimSpace(stdout.String()), `{"version":"0.1.0","contracts":["1.0"]}`; got != want {
+		t.Errorf("version --json = %q, want %q", got, want)
+	}
+}

@@ -26,7 +26,7 @@ Document how to install and use `agent-loop-claude`, and prepare its first relea
 
 ## Steps
 
-- [ ] Make `version` report `0.1.0` by default, with a test.
+- [x] Make `version` report `0.1.0` by default, with a test.
 - [ ] Add `CHANGELOG.md` and update the README; test that they name the release and contracts.
 
 ## Acceptance criteria
