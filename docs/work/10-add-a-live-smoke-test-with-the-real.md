@@ -3,7 +3,7 @@
 **Issue:** [#10](https://github.com/mayusuk/agent-loop-handlers/issues/10) (feature)
 **Branch:** `issue/10-add-a-live-smoke-test-with-the-real`
 **Base:** `origin/main @ 0f14a37` (checked before branching)
-**Status:** Draft
+**Status:** Done
 
 ## Summary
 
@@ -29,7 +29,7 @@ Add `e2e/`, a smoke test that runs `implement`, then `review` on the pushed head
 - [x] Write this work plan.
 - [x] Add the harness and the dry run with the fake `claude`.
 - [x] Add the live test, skipped unless `AGENT_LOOP_LIVE=1`.
-- [ ] Document how to run it in the README.
+- [x] Document how to run it in the README.
 
 ## Acceptance criteria
 
@@ -56,4 +56,4 @@ Add `e2e/`, a smoke test that runs `implement`, then `review` on the pushed head
 
 ## Outcome
 
-_Filled in before shipping._
+Added `e2e/` with the harness, `TestPlanT9_LiveSmoke` (skipped unless `AGENT_LOOP_LIVE=1`), `TestPlanT9_HarnessDryRun` and `TestPlanT9_GhRefusesOtherCalls`, and a README section on running the live test. The approach is as planned. The live test was not run by the author (it calls the real Claude); without `AGENT_LOOP_LIVE=1` it reports SKIP. No follow-up issues filed.
