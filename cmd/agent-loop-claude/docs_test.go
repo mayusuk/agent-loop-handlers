@@ -57,3 +57,16 @@ func TestI12_4_ReadmeNamesTheReleaseAndProfiles(t *testing.T) {
 		}
 	}
 }
+
+// TestI12_4_ReadmeProfileLeavesMintOut: the README profile has no
+// [stages.mint] entry, since mint always returns failed in this release
+// (work plan #11 D4, D11; review R4).
+func TestI12_4_ReadmeProfileLeavesMintOut(t *testing.T) {
+	readme := readRepoFile(t, "README.md")
+	if regexp.MustCompile(`(?m)^\[stages\.mint\]`).MatchString(readme) {
+		t.Error("README.md profile has a [stages.mint] entry; mint is not supported in this release")
+	}
+	if regexp.MustCompile(`(?m)^command +=\s+\["agent-loop-claude", "mint"`).MatchString(readme) {
+		t.Error(`README.md profile has a command ["agent-loop-claude", "mint"]; mint is not supported in this release`)
+	}
+}
