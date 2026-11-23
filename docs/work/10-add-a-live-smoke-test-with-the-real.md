@@ -28,7 +28,7 @@ Add `e2e/`, a smoke test that runs `implement`, then `review` on the pushed head
 
 - [x] Write this work plan.
 - [x] Add the harness and the dry run with the fake `claude`.
-- [ ] Add the live test, skipped unless `AGENT_LOOP_LIVE=1`.
+- [x] Add the live test, skipped unless `AGENT_LOOP_LIVE=1`.
 - [ ] Document how to run it in the README.
 
 ## Acceptance criteria
