@@ -45,6 +45,7 @@ Add `e2e/`, a smoke test that runs `implement`, then `review` on the pushed head
 - **D5** [gap] plan T9: the live test passes only when every stage's result is `done`, not just valid: a `failed` review or address would mean the stage does not work. After implement, `done.head` must be the remote `agent/1` and differ from the base; after review the remote is unchanged; after address the remote `agent/1` is `done.head`.
 - **D6** [gap] plan T9: each stage gets a 20-minute deadline. The README tells the owner to run with `-timeout 90m`, since `go test` stops at 10 minutes by default.
 - **D7** [gap] plan T9: the harness also runs in CI with the fake `claude` (`TestPlanT9_HarnessDryRun`). Why: the live test never runs in CI, so without this its harness would be untested.
+- **D8** [gap] plan T9, D15, INTEGRATION-SPEC §3.1 (review R1): the handler environment carries no GitHub credentials, as the worker's does not. The harness drops every `GH_*` and `GITHUB_*` variable (tokens, `GH_HOST`) and `GIT_CONFIG*`, sets `GH_CONFIG_DIR` to an empty directory, and sets `GIT_CONFIG_GLOBAL` to an empty file with `GIT_CONFIG_NOSYSTEM=1`, so a real `gh` or `git` the agent runs by its path is logged out and has no credential helper. `HOME` stays, because the real `claude` keeps its login there. `PATH` keeps the owner's directories after the fake `gh`, because the real `gh` usually shares one with `git`, `go` and `claude`, and an agent could name it by path anyway; the credentials are the boundary.
 
 ## Verification
 
@@ -57,3 +58,5 @@ Add `e2e/`, a smoke test that runs `implement`, then `review` on the pushed head
 ## Outcome
 
 Added `e2e/` with the harness, `TestPlanT9_LiveSmoke` (skipped unless `AGENT_LOOP_LIVE=1`), `TestPlanT9_HarnessDryRun` and `TestPlanT9_GhRefusesOtherCalls`, and a README section on running the live test. The approach is as planned. The live test was not run by the author (it calls the real Claude); without `AGENT_LOOP_LIVE=1` it reports SKIP. No follow-up issues filed.
+
+Review round 1: R1 (security) fixed. The handler environment no longer carries the owner's GitHub tokens, gh login or git credential helper (D8), proven by `TestPlanT9_HandlerGetsNoGitHubCredentials`. No pushbacks.

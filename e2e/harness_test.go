@@ -294,6 +294,7 @@ func (s *smoke) run(in contract.Input) stageRun {
 		"GOCACHE=" + filepath.Join(cache, "go-build"),
 		"GOTMPDIR=" + filepath.Join(cache, "tmp"),
 	}
+	env = append(env, s.noGitHub()...)
 	if err := os.MkdirAll(filepath.Join(cache, "tmp"), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -324,17 +325,43 @@ func (s *smoke) run(in contract.Input) stageRun {
 
 // handlerEnviron is the test's environment without the variables the
 // harness sets, so a stray one in the owner's shell can't change a run.
+// It also drops every GH_* and GITHUB_* variable (GH_TOKEN, GITHUB_TOKEN,
+// GH_ENTERPRISE_TOKEN, GH_HOST, ...) and git's own config locations, so
+// no GitHub credential reaches the handler (work plan D8,
+// INTEGRATION-SPEC §3.1).
 func handlerEnviron() []string {
 	var env []string
 	for _, kv := range os.Environ() {
 		k, _, _ := strings.Cut(kv, "=")
 		if strings.HasPrefix(k, "AGENT_LOOP_") || strings.HasPrefix(k, "FAKECLAUDE_") ||
+			strings.HasPrefix(k, "GH_") || strings.HasPrefix(k, "GITHUB_") ||
+			strings.HasPrefix(k, "GIT_CONFIG") ||
 			k == "PATH" || k == "GOCACHE" || k == "GOTMPDIR" {
 			continue
 		}
 		env = append(env, kv)
 	}
 	return env
+}
+
+// noGitHub is the environment that keeps a real gh or git, if the agent
+// runs one by its path, logged out (work plan D8): gh reads its login from
+// an empty GH_CONFIG_DIR, and git reads no global or system config, so no
+// credential helper hands it the owner's GitHub login. HOME stays, since
+// the real claude keeps its own login there.
+func (s *smoke) noGitHub() []string {
+	s.t.Helper()
+	cfg := filepath.Join(s.root, "gh-config")
+	if err := os.MkdirAll(cfg, 0o700); err != nil {
+		s.t.Fatal(err)
+	}
+	empty := filepath.Join(s.root, "gitconfig-empty")
+	writeFile(s.t, empty, "", 0o644)
+	return []string{
+		"GH_CONFIG_DIR=" + cfg,
+		"GIT_CONFIG_GLOBAL=" + empty,
+		"GIT_CONFIG_NOSYSTEM=1",
+	}
 }
 
 // tail is the end of a run log, enough to see why a stage went wrong.

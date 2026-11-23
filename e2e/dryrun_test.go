@@ -1,6 +1,8 @@
 package e2e
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -82,6 +84,58 @@ func TestPlanT9_GhRefusesOtherCalls(t *testing.T) {
 	for _, want := range []string{"Adds Sub.", "### F1 (score 4) T\n(no file)\n\nB", ownerID} {
 		if !strings.Contains(out, want) {
 			t.Errorf("gh pr view 2 lacks %q:\n%s", want, out)
+		}
+	}
+}
+
+// TestPlanT9_HandlerGetsNoGitHubCredentials: the owner's GitHub tokens,
+// gh login and git config never reach the agent, so a real gh or git run
+// by its path is logged out (work plan D8, INTEGRATION-SPEC §3.1).
+func TestPlanT9_HandlerGetsNoGitHubCredentials(t *testing.T) {
+	ownerGh := t.TempDir()
+	writeFile(t, filepath.Join(ownerGh, "hosts.yml"), "github.com:\n  oauth_token: owner-secret\n", 0o600)
+	ownerGit := filepath.Join(t.TempDir(), "gitconfig")
+	writeFile(t, ownerGit, "[credential]\n\thelper = owner-secret\n", 0o644)
+	for k, v := range map[string]string{
+		"GH_TOKEN": "owner-secret", "GITHUB_TOKEN": "owner-secret",
+		"GH_ENTERPRISE_TOKEN": "owner-secret", "GITHUB_ENTERPRISE_TOKEN": "owner-secret",
+		"GH_HOST": "github.com", "GH_CONFIG_DIR": ownerGh, "GIT_CONFIG_GLOBAL": ownerGit,
+	} {
+		t.Setenv(k, v)
+	}
+
+	s := newSmoke(t)
+	s.claudeBin = fakeClaude
+	s.settings = sandboxSettings(t)
+	dump := filepath.Join(s.root, "agent-env.txt")
+	s.stageEnv[contract.StageImplement] = []string{"FAKECLAUDE_SHELL=" + `{ env; echo "gh-config: $(ls -A "$GH_CONFIG_DIR")"; echo "gh-path: $(command -v gh)"; echo "git-helper: $(git config --get credential.helper)"; } > '` + dump + `' &&
+printf 'package calc\n' > sub.go && git add sub.go && git commit -qm 'Add Sub' &&
+printf '%s' '{"result":"done","done":{"change":{"title":"Add Sub","body":"Adds Sub."}}}' > "$AGENT_LOOP_CLAUDE_DRAFT"`}
+	ws := s.workspace("implement", "-b", branch, "origin/main")
+	mustDone(t, s.run(s.input(contract.StageImplement, ws, s.base)), contract.StageImplement)
+
+	data, err := os.ReadFile(dump)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(data)
+	if strings.Contains(got, "owner-secret") || strings.Contains(got, ownerGh) || strings.Contains(got, ownerGit) {
+		t.Errorf("the owner's GitHub credentials reached the agent:\n%s", got)
+	}
+	for _, k := range []string{"GH_TOKEN", "GITHUB_TOKEN", "GH_ENTERPRISE_TOKEN", "GITHUB_ENTERPRISE_TOKEN", "GH_HOST"} {
+		if strings.Contains("\n"+got, "\n"+k+"=") {
+			t.Errorf("%s reached the agent", k)
+		}
+	}
+	for _, want := range []string{
+		"\nGH_CONFIG_DIR=" + filepath.Join(s.root, "gh-config") + "\n",
+		"\ngh-config: \n",
+		"\ngh-path: " + filepath.Join(s.ghDir, "gh") + "\n",
+		"\ngit-helper: \n",
+		"\nGIT_CONFIG_NOSYSTEM=1\n",
+	} {
+		if !strings.Contains("\n"+got, want) {
+			t.Errorf("agent environment lacks %q:\n%s", strings.TrimSpace(want), got)
 		}
 	}
 }
