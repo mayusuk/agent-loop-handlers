@@ -25,8 +25,8 @@ The live smoke test's fake `gh` now logs its calls inside each stage's allowed t
 ## Steps
 
 - [x] Test that the fake gh's log is inside the stage's allowed writes (fails: it is under `<root>/gh`), then move the log.
-- [ ] Assert the exact egress and permission lists.
-- [ ] Test that each stage gets its own `TMPDIR`.
+- [x] Assert the exact egress and permission lists.
+- [x] Test that each stage gets its own `TMPDIR`.
 - [ ] Bump agent-loop and add the drift checksum test; update the README note.
 
 ## Acceptance criteria

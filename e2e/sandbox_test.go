@@ -218,27 +218,37 @@ func TestT7_2_LiveSandboxSettings(t *testing.T) {
 		}
 	}
 
+	// The exact lists, written out rather than taken from liveEgress, so a
+	// change to the allowlist has to change this test too (issue #43 R2):
+	// the Anthropic API and §7.2's registries, and no GitHub host (work
+	// plan 38 D1).
 	net := sb.Network
-	for _, d := range net.AllowedDomains {
-		if strings.Contains(d, "github") {
-			t.Errorf("allowedDomains names GitHub host %q", d)
-		}
+	wantEgress := []string{
+		"api.anthropic.com",
+		"registry.npmjs.org",
+		"proxy.golang.org",
+		"sum.golang.org",
+		"pypi.org",
+		"files.pythonhosted.org",
+		"crates.io",
+		"static.crates.io",
 	}
-	if !slices.Contains(net.AllowedDomains, "api.anthropic.com") {
-		t.Errorf("allowedDomains = %q, lacks api.anthropic.com", net.AllowedDomains)
+	if !slices.Equal(net.AllowedDomains, wantEgress) {
+		t.Errorf("allowedDomains = %q, want %q", net.AllowedDomains, wantEgress)
 	}
-	for _, d := range []string{"localhost", "127.0.0.1", "::1", "0.0.0.0"} {
-		if !slices.Contains(net.DeniedDomains, d) {
-			t.Errorf("deniedDomains lacks %s", d)
-		}
+	wantDenied := []string{"localhost", "*.localhost", "127.0.0.1", "::1", "0.0.0.0", "*.local", "host.docker.internal"}
+	if !slices.Equal(net.DeniedDomains, wantDenied) {
+		t.Errorf("deniedDomains = %q, want %q", net.DeniedDomains, wantDenied)
 	}
 	if len(net.AllowUnixSockets) != 0 || net.AllowAllUnixSockets || net.AllowLocalBinding {
 		t.Errorf("network allows sockets or local binding: %+v", net)
 	}
-	for _, r := range got.Permissions.Allow {
-		if strings.Contains(r, "github") {
-			t.Errorf("permissions.allow names GitHub: %q", r)
-		}
+	var wantAllow []string
+	for _, d := range wantEgress {
+		wantAllow = append(wantAllow, "WebFetch(domain:"+d+")")
+	}
+	if !slices.Equal(got.Permissions.Allow, wantAllow) {
+		t.Errorf("permissions.allow = %q, want %q", got.Permissions.Allow, wantAllow)
 	}
 }
 

@@ -1,8 +1,10 @@
 package e2e
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -178,6 +180,50 @@ printf '%s' '{"result":"done","done":{"change":{"title":"Add Sub","body":"Adds S
 	} {
 		if !strings.Contains("\n"+got, want) {
 			t.Errorf("agent environment lacks %q:\n%s", strings.TrimSpace(want), got)
+		}
+	}
+}
+
+// TestT7_2_EachStageGetsItsOwnTempDir: every stage runs with TMPDIR set to
+// its own run-<stage>/tmp, which exists and is in that stage's allowWrite
+// (TECHNICAL-SPEC §7.2 "per-run temp directory", work plan 38 D3, issue
+// #43 R3).
+func TestT7_2_EachStageGetsItsOwnTempDir(t *testing.T) {
+	s := newSmoke(t)
+	s.claudeBin = fakeClaude
+	s.sandbox = true
+	record := `[ -d "$TMPDIR" ] && printf '%s' "$TMPDIR" > "$TMPDIR/seen" && `
+	s.stageEnv[contract.StageImplement] = []string{"FAKECLAUDE_SHELL=" + record + dryImplement}
+	s.stageEnv[contract.StageReview] = []string{"FAKECLAUDE_SHELL=" + record + dryReview}
+	s.stageEnv[contract.StageAddress] = []string{"FAKECLAUDE_SHELL=" + record + dryAddress}
+	s.flow()
+
+	seen := map[string]contract.Stage{}
+	for _, st := range []contract.Stage{contract.StageImplement, contract.StageReview, contract.StageAddress} {
+		dir := filepath.Join(s.root, "run-"+string(st))
+		want := filepath.Join(dir, "tmp")
+		data, err := os.ReadFile(filepath.Join(want, "seen"))
+		if err != nil {
+			t.Fatalf("%s: TMPDIR not recorded in its own temp directory: %v", st, err)
+		}
+		got := string(data)
+		if got != want {
+			t.Errorf("%s: TMPDIR = %q, want %q", st, got, want)
+		}
+		if prev, ok := seen[got]; ok {
+			t.Errorf("%s and %s share TMPDIR %q", prev, st, got)
+		}
+		seen[got] = st
+		settings, err := os.ReadFile(filepath.Join(dir, "claude-settings.json"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		var cs claudeSettings
+		if err := json.Unmarshal(settings, &cs); err != nil {
+			t.Fatal(err)
+		}
+		if !slices.Contains(cs.Sandbox.Filesystem.AllowWrite, resolve(want)) {
+			t.Errorf("%s: allowWrite %q lacks its TMPDIR %s", st, cs.Sandbox.Filesystem.AllowWrite, resolve(want))
 		}
 	}
 }
