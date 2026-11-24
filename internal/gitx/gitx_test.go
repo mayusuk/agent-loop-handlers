@@ -152,6 +152,9 @@ func TestFileLines(t *testing.T) {
 		{"e.txt", 0, true},
 		{"missing.txt", 0, false},
 		{"dir", 0, false},
+		{"dir/", 0, false},
+		{"d*/x", 0, false},
+		{"", 0, false},
 	} {
 		n, ok, err := FileLines(ctx, ws, head, c.path)
 		if err != nil || n != c.n || ok != c.ok {
@@ -164,6 +167,88 @@ func TestFileLines(t *testing.T) {
 	run(t, ws, "commit", "-q", "-m", "later")
 	if _, ok, err := FileLines(ctx, ws, head, "later.txt"); ok || err != nil {
 		t.Errorf("FileLines(later.txt at the earlier commit) = %v, %v; want not a file", ok, err)
+	}
+}
+
+// A path with pathspec magic is read literally: it is a file only when a
+// file of exactly that name is at the commit, and never a git error that
+// would fail the review (work plan #7 D4, #29 review R1).
+func TestD4_FileLinesPathspecMagicIsLiteral(t *testing.T) {
+	ctx := context.Background()
+	ws, _ := clone(t)
+	os.WriteFile(filepath.Join(ws, "src.go"), []byte("a\nb\n"), 0o644)
+	os.WriteFile(filepath.Join(ws, ":(glob)lit.go"), []byte("x\n"), 0o644)
+	run(t, ws, "add", "--", "src.go", ":(literal):(glob)lit.go")
+	run(t, ws, "commit", "-q", "-m", "files")
+	head := run(t, ws, "rev-parse", "HEAD")
+	for _, c := range []struct {
+		path string
+		n    int
+		ok   bool
+	}{
+		{":(bad)src.go", 0, false},
+		{":!src.go", 0, false},
+		{":(exclude)src.go", 0, false},
+		{":(glob)src.go", 0, false},
+		{":(icase)SRC.go", 0, false},
+		{":/src.go", 0, false},
+		{":src.go", 0, false},
+		{":(glob)lit.go", 1, true},
+		{"src.go", 2, true},
+	} {
+		n, ok, err := FileLines(ctx, ws, head, c.path)
+		if err != nil || n != c.n || ok != c.ok {
+			t.Errorf("FileLines(%s) = %d, %v, %v; want %d, %v", c.path, n, ok, err, c.n, c.ok)
+		}
+	}
+}
+
+// A symlink is a file with the lines of its link text, and a submodule is
+// not a file (#29 D3).
+func TestD3_FileLinesSymlinkIsAFileSubmoduleIsNot(t *testing.T) {
+	ctx := context.Background()
+	ws, _ := clone(t)
+	base := commit(t, ws, "a.txt")
+	if err := os.Symlink("a.txt", filepath.Join(ws, "l")); err != nil {
+		t.Fatal(err)
+	}
+	run(t, ws, "add", "l")
+	run(t, ws, "update-index", "--add", "--cacheinfo", "160000,"+base+",sub")
+	run(t, ws, "commit", "-q", "-m", "links")
+	head := run(t, ws, "rev-parse", "HEAD")
+	if mode := strings.Fields(run(t, ws, "ls-tree", head, "--", "l"))[0]; mode != "120000" {
+		t.Fatalf("l has mode %s, want a symlink (120000)", mode)
+	}
+	if n, ok, err := FileLines(ctx, ws, head, "l"); n != 1 || !ok || err != nil {
+		t.Errorf("FileLines(symlink) = %d, %v, %v; want 1, true", n, ok, err)
+	}
+	if n, ok, err := FileLines(ctx, ws, head, "sub"); n != 0 || ok || err != nil {
+		t.Errorf("FileLines(submodule) = %d, %v, %v; want 0, false", n, ok, err)
+	}
+}
+
+// A git failure is an error, never "not a file" (work plan #7 D5, #29).
+func TestD5_FileLinesGitFailureIsAnError(t *testing.T) {
+	ws, _ := clone(t)
+	head := commit(t, ws, "a.txt")
+	if _, ok, err := FileLines(context.Background(), ws, strings.Repeat("0", 40), "a.txt"); err == nil || ok {
+		t.Errorf("FileLines(unknown commit) = %v, %v; want an error", ok, err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, ok, err := FileLines(ctx, ws, head, "a.txt"); err == nil || ok {
+		t.Errorf("FileLines(done ctx) = %v, %v; want an error", ok, err)
+	}
+	if _, ok, err := FileLines(context.Background(), t.TempDir(), head, "a.txt"); err == nil || ok {
+		t.Errorf("FileLines(not a repository) = %v, %v; want an error", ok, err)
+	}
+	// The commit resolves but its tree is gone.
+	tree := run(t, ws, "rev-parse", head+"^{tree}")
+	if err := os.Remove(filepath.Join(ws, ".git", "objects", tree[:2], tree[2:])); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok, err := FileLines(context.Background(), ws, head, "a.txt"); err == nil || ok {
+		t.Errorf("FileLines(missing tree) = %v, %v; want an error", ok, err)
 	}
 }
 

@@ -139,13 +139,19 @@ func Dirty(ctx context.Context, dir string) (bool, error) {
 
 // FileLines returns the number of lines of the file at path in commit,
 // counted as the worker counts them: a last line without a newline still
-// counts. ok is false when path is not a file (a blob) at commit, which
-// includes a missing commit or path and a directory.
+// counts. ok is false when path is not a file (a blob) at commit: it is
+// missing there, or a directory or a submodule. Any other failure,
+// including a commit git cannot resolve, a broken repository or a done
+// ctx, is an error, never "not a file" (work plan #7 D5, #29 D1).
 func FileLines(ctx context.Context, dir, commit, path string) (n int, ok bool, err error) {
-	obj := commit + ":" + path
-	if t, err := Git(ctx, dir, "cat-file", "-t", obj); err != nil || strings.TrimSpace(string(t)) != "blob" {
-		return 0, false, nil
+	if _, err := Git(ctx, dir, "rev-parse", "--verify", "--quiet", commit+"^{commit}"); err != nil {
+		return 0, false, err
 	}
+	ok, err = isBlob(ctx, dir, commit, path)
+	if err != nil || !ok {
+		return 0, false, err
+	}
+	obj := commit + ":" + path
 	data, err := Git(ctx, dir, "cat-file", "blob", obj)
 	if err != nil {
 		return 0, false, err
@@ -155,6 +161,32 @@ func FileLines(ctx context.Context, dir, commit, path string) (n int, ok bool, e
 		n++
 	}
 	return n, true, nil
+}
+
+// isBlob reports whether path names a blob in commit's tree. ls-tree
+// exits 0 with no entry for a missing path, so only a real failure is an
+// error. --literal-pathspecs makes git read path as a plain name, never
+// as pathspec magic such as ":(bad)x" or ":!x", which would otherwise
+// make git exit 128 and fail the review (#29 review R1). The entry must
+// match path exactly, so "dir/" listing the files under dir does not
+// count.
+func isBlob(ctx context.Context, dir, commit, path string) (bool, error) {
+	if path == "" {
+		return false, nil
+	}
+	out, err := Git(ctx, dir, "--literal-pathspecs", "ls-tree", "-z", "--full-tree", commit, "--", path)
+	if err != nil {
+		return false, err
+	}
+	for _, e := range bytes.Split(out, []byte{0}) {
+		meta, name, found := bytes.Cut(e, []byte{'\t'})
+		if !found || string(name) != path {
+			continue
+		}
+		f := strings.Fields(string(meta))
+		return len(f) == 3 && f[1] == "blob", nil
+	}
+	return false, nil
 }
 
 // Push pushes commit sha to branch on Remote with a plain push: a push
