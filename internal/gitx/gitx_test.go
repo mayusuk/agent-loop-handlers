@@ -152,6 +152,9 @@ func TestFileLines(t *testing.T) {
 		{"e.txt", 0, true},
 		{"missing.txt", 0, false},
 		{"dir", 0, false},
+		{"dir/", 0, false},
+		{"d*/x", 0, false},
+		{"", 0, false},
 	} {
 		n, ok, err := FileLines(ctx, ws, head, c.path)
 		if err != nil || n != c.n || ok != c.ok {
@@ -164,6 +167,31 @@ func TestFileLines(t *testing.T) {
 	run(t, ws, "commit", "-q", "-m", "later")
 	if _, ok, err := FileLines(ctx, ws, head, "later.txt"); ok || err != nil {
 		t.Errorf("FileLines(later.txt at the earlier commit) = %v, %v; want not a file", ok, err)
+	}
+}
+
+// A git failure is an error, never "not a file" (work plan #7 D5, #29).
+func TestD5_FileLinesGitFailureIsAnError(t *testing.T) {
+	ws, _ := clone(t)
+	head := commit(t, ws, "a.txt")
+	if _, ok, err := FileLines(context.Background(), ws, strings.Repeat("0", 40), "a.txt"); err == nil || ok {
+		t.Errorf("FileLines(unknown commit) = %v, %v; want an error", ok, err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, ok, err := FileLines(ctx, ws, head, "a.txt"); err == nil || ok {
+		t.Errorf("FileLines(done ctx) = %v, %v; want an error", ok, err)
+	}
+	if _, ok, err := FileLines(context.Background(), t.TempDir(), head, "a.txt"); err == nil || ok {
+		t.Errorf("FileLines(not a repository) = %v, %v; want an error", ok, err)
+	}
+	// The commit resolves but its tree is gone.
+	tree := run(t, ws, "rev-parse", head+"^{tree}")
+	if err := os.Remove(filepath.Join(ws, ".git", "objects", tree[:2], tree[2:])); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok, err := FileLines(context.Background(), ws, head, "a.txt"); err == nil || ok {
+		t.Errorf("FileLines(missing tree) = %v, %v; want an error", ok, err)
 	}
 }
 

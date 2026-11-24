@@ -3,8 +3,10 @@ package stage
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/mayusuk/agent-loop-handlers/internal/draft"
 	"github.com/mayusuk/agent-loop-handlers/internal/gitx"
@@ -83,7 +85,7 @@ func fixLocations(ctx context.Context, dir, commit string, d *draft.Done, logf f
 				loc = fmt.Sprintf("%s:%d", path, *nf.Line)
 			}
 			logf("new finding %d: %s is not a file at %s; its location moves to the body", i+1, path, commit)
-			nf.Body = fmt.Sprintf("Location: `%s`\n\n%s", loc, nf.Body)
+			nf.Body = "Location: " + codeSpan(loc) + "\n\n" + nf.Body
 			nf.Path, nf.Line = nil, nil
 			continue
 		}
@@ -107,4 +109,34 @@ func repoPath(p string) bool {
 		}
 	}
 	return true
+}
+
+// codeSpan writes s as one Markdown code span on one line (#29 D2):
+// control characters are escaped as in Go (\n, \t, \x01), and the
+// backtick fence is one longer than the longest run of backticks in s,
+// with a space inside each end when s starts or ends with a backtick, as
+// CommonMark requires.
+func codeSpan(s string) string {
+	var b strings.Builder
+	run, longest := 0, 0
+	for _, c := range s {
+		if c == '`' {
+			run++
+			longest = max(longest, run)
+		} else {
+			run = 0
+		}
+		if unicode.IsControl(c) {
+			q := strconv.QuoteRune(c)
+			b.WriteString(q[1 : len(q)-1])
+			continue
+		}
+		b.WriteRune(c)
+	}
+	text := b.String()
+	if strings.HasPrefix(text, "`") || strings.HasSuffix(text, "`") {
+		text = " " + text + " "
+	}
+	fence := strings.Repeat("`", longest+1)
+	return fence + text + fence
 }

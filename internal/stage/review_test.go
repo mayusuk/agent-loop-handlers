@@ -1,6 +1,7 @@
 package stage
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -205,5 +206,87 @@ func TestD2_ReviewWorkspaceNotAtTheCommitIsFailed(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(f.ws, "ran")); err == nil {
 		t.Errorf("claude ran in the wrong workspace")
+	}
+}
+
+// Every path form work plan #7 D4 treats as not repository-relative moves
+// to the body, even when it names a file that is at the commit (#29 R2).
+func TestD8_BadPathFormsMoveToTheBody(t *testing.T) {
+	paths := []string{"/src.go", `docs\a.md`, "docs//a.md", "src.go/", "./src.go", "docs/./a.md", "docs/../src.go", ".", ".."}
+	var findings []string
+	for i, p := range paths {
+		findings = append(findings, fmt.Sprintf(`{"score":3,"path":%q,"line":1,"title":"t%d","body":"b"}`, p, i))
+	}
+	f := newReviewFixture(t)
+	o := f.review(draftOnly, reviewDraft(strings.Join(findings, ",")))
+	d := reviewDone(t, o)
+	for i, p := range paths {
+		nf := d.NewFindings[i]
+		if nf.Path != nil || nf.Line != nil {
+			t.Errorf("%s: finding = %+v, want no path or line", p, nf)
+		}
+		if b, want := body(t, o, nf), "Location: `"+p+":1`\n\nb"; b != want {
+			t.Errorf("%s: body = %q, want %q", p, b, want)
+		}
+	}
+}
+
+// A backtick or a control character in the path keeps the Location line
+// one line and one code span (#29 R4, D2).
+func TestD8_LocationLineSurvivesBackticksAndNewlines(t *testing.T) {
+	f := newReviewFixture(t)
+	o := f.review(draftOnly, reviewDraft(
+		`{"score":3,"path":"a`+"`"+`b.go","line":2,"title":"t1","body":"b1"},`+
+			`{"score":3,"path":"x\ny.go","title":"t2","body":"b2"}`))
+	d := reviewDone(t, o)
+	for i, want := range []string{"Location: ``a`b.go:2``\n\nb1", "Location: `x\\ny.go`\n\nb2"} {
+		if b := body(t, o, d.NewFindings[i]); b != want {
+			t.Errorf("finding %d body = %q, want %q", i+1, b, want)
+		}
+	}
+}
+
+func TestD8_CodeSpan(t *testing.T) {
+	for in, want := range map[string]string{
+		"a.go":            "`a.go`",
+		"a`b":             "``a`b``",
+		"a``b`c":          "```a``b`c```",
+		"`a":              "`` `a ``",
+		"a`":              "`` a` ``",
+		"a\nb\tc\x01\x7f": "`a\\nb\\tc\\x01\\x7f`",
+		"a\r\n":           "`a\\r\\n`",
+	} {
+		if got := codeSpan(in); got != want {
+			t.Errorf("codeSpan(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+// A body the Location prefix pushes over 64 KiB is failed like any
+// oversized text; one that still fits is kept (work plan #7 D4, #29 R3).
+func TestD8_LocationPrefixOverflowIsFailed(t *testing.T) {
+	prefix := len("Location: `gone.go`\n\n")
+	finding := func(n int) string {
+		return reviewDraft(`{"score":3,"path":"gone.go","title":"t","body":"` + strings.Repeat("x", n) + `"}`)
+	}
+	f := newReviewFixture(t)
+	o := f.review(draftOnly, finding(contract.MaxTextFile-prefix))
+	if b := body(t, o, reviewDone(t, o).NewFindings[0]); len(b) != contract.MaxTextFile {
+		t.Errorf("body is %d bytes, want exactly %d", len(b), contract.MaxTextFile)
+	}
+	f = newReviewFixture(t)
+	if r := failedReason(t, f.review(draftOnly, finding(contract.MaxTextFile-prefix+1))); !strings.Contains(r, "larger than 64 KiB") {
+		t.Errorf("reason = %q, want the body over 64 KiB", r)
+	}
+}
+
+// A git failure reading a file at the commit fails the run, never moving
+// the location to the body (work plan #7 D5, #29 R1).
+func TestD5_ReviewGitReadFailureIsFailed(t *testing.T) {
+	f := newReviewFixture(t)
+	shell := `rm -rf .git/objects/?? .git/objects/pack && ` + draftOnly
+	r := failedReason(t, f.review(shell, reviewDraft(`{"score":3,"path":"src.go","line":1,"title":"t","body":"b"}`)))
+	if want := "cannot read src.go at " + f.head + ": "; !strings.HasPrefix(r, want) {
+		t.Errorf("reason = %q, want it to start %q", r, want)
 	}
 }
