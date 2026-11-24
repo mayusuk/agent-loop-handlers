@@ -47,3 +47,5 @@ A runner other than agent-loop's that writes minimal settings without the field 
 ## Outcome
 
 Done as planned. `CheckSettings` now refuses settings whose `sandbox.allowUnsandboxedCommands` is `true` or absent (D1); the minimal settings fixtures write it as `false`; the README says so (no CHANGELOG entry: `TestI12_4_ChangelogNamesTheRelease` requires the newest section to be a released version, so it waits for the next release). The address stage has a sandbox test: `--settings` passed, no settings or bad settings fail before claude starts and nothing is pushed, `--unsandboxed` runs without `--settings` and warns. The test steps and the fix went in one commit, since the fixture change would otherwise have been a no-op. No follow-up issues.
+
+Review round 1 (PR #47): R2 added the `--unsandboxed` with given settings case to `TestPlanT8_AddressStageIsSandboxed` (work plan #9 D3); R3 checked the `os.WriteFile` errors in the sandbox tests; R1 (CI pending) needed no change, CI passed on 69cdfed. No pushbacks.
