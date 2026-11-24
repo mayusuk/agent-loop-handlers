@@ -50,3 +50,5 @@ Between claude exiting and Go reaping it (microseconds) a stop still counts as a
 ## Outcome
 
 Done as planned. R1 and R2 already behaved correctly and now have tests; R3 and R4 were reproduced by failing tests and fixed in `internal/claude/claude.go`. The fake gained `FAKECLAUDE_OUTPUT_FIRST` for R2. No follow-up issues.
+
+Review round 1 (PR #51): R1 (tests) led to a change: `TestFR18AC4_ExitBeforeStopTimeWhilePipesDrainIsNotTimeLimit` gained two subtests where the caller's context is cancelled after claude exits while a child holds stderr; they fail if `Run` reports `parent.Err()` after Wait without the stopped flag. No pushbacks.
