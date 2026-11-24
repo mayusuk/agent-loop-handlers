@@ -190,13 +190,6 @@ Work is planned and tracked with the plan-work / work-issue workflow (`.wf.toml`
 
 ### Live smoke test
 
-> **Expect an empty gh-call log for now.** Bug
-> [#43](https://github.com/mayusuk/agent-loop-handlers/issues/43): the fake `gh` writes its
-> `calls.log` outside the sandbox's allowed write paths. The sandbox denies the write, but the fake
-> `gh` still serves the item and the change, so the stages can still end `done`; the "gh calls" the
-> test logs at the end will be empty until #43 is fixed. The sandbox settings themselves are the
-> full TECHNICAL-SPEC §7.2 set (#38).
-
 `e2e/live_test.go` runs `implement`, then `review` on the pushed head, then `address` on the
 findings, with the real Claude Code. It builds `agent-loop-claude`, seeds a small Go module in a
 bare local remote, and plays the worker: a fresh clone per stage, `input.json` written as the
@@ -224,10 +217,14 @@ It spends real Claude usage (three headless sessions). Each stage gets a 20-minu
   other credential stores denied, and network access only to the Anthropic API and the package
   registries (no GitHub host, no loopback). `AGENT_LOOP_CLAUDE_SETTINGS=<file>` uses your own
   settings file instead; it then is your job to make it as strict.
+  The settings generator in `e2e/sandbox_test.go` is a copy of agent-loop's
+  `internal/runners/sandbox.go`; `TestT7_2_SandboxCopyInStep` fails when an agent-loop bump changes
+  that file, so update the copy and its pinned checksum together.
 - `AGENT_LOOP_LIVE_UNSANDBOXED=1` passes `--unsandboxed` instead, for a machine without the
   sandbox. Claude then has your full user access.
 
-With `-v` the test logs each stage's time and, at the end, the `gh` calls the agent made. A failing
+With `-v` the test logs each stage's time and, at the end, the `gh` calls the agent made (the fake
+`gh` logs them to `run-<stage>/tmp/gh-calls.log`, inside the stage's sandbox). A failing
 stage prints the end of its run log.
 
 `TestPlanT9_HarnessDryRun` runs the same flow with the fake `claude` in every `go test`, so the

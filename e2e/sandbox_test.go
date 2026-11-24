@@ -1,8 +1,11 @@
 package e2e
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -13,6 +16,8 @@ import (
 // agent-loop's internal/runners/sandbox.go writes them (issue #38). This
 // repository can't import agent-loop's internal packages, so the types and
 // the generator are a copy: keep them in step with sandbox.go.
+// TestT7_2_SandboxCopyInStep fails when the required agent-loop module's
+// sandbox.go changes: update this copy and upstreamSandboxSHA256 together.
 
 // liveEgress is §7.2's default egress allowlist without the code host's
 // hosts: the live test's remote is a local bare repository and its gh is a
@@ -218,26 +223,153 @@ func TestT7_2_LiveSandboxSettings(t *testing.T) {
 		}
 	}
 
+	// The exact lists, written out rather than taken from liveEgress, so a
+	// change to the allowlist has to change this test too (issue #43 R2):
+	// the Anthropic API and §7.2's registries, and no GitHub host (work
+	// plan 38 D1).
 	net := sb.Network
-	for _, d := range net.AllowedDomains {
-		if strings.Contains(d, "github") {
-			t.Errorf("allowedDomains names GitHub host %q", d)
-		}
+	wantEgress := []string{
+		"api.anthropic.com",
+		"registry.npmjs.org",
+		"proxy.golang.org",
+		"sum.golang.org",
+		"pypi.org",
+		"files.pythonhosted.org",
+		"crates.io",
+		"static.crates.io",
 	}
-	if !slices.Contains(net.AllowedDomains, "api.anthropic.com") {
-		t.Errorf("allowedDomains = %q, lacks api.anthropic.com", net.AllowedDomains)
+	if !slices.Equal(net.AllowedDomains, wantEgress) {
+		t.Errorf("allowedDomains = %q, want %q", net.AllowedDomains, wantEgress)
 	}
-	for _, d := range []string{"localhost", "127.0.0.1", "::1", "0.0.0.0"} {
-		if !slices.Contains(net.DeniedDomains, d) {
-			t.Errorf("deniedDomains lacks %s", d)
-		}
+	wantDenied := []string{"localhost", "*.localhost", "127.0.0.1", "::1", "0.0.0.0", "*.local", "host.docker.internal"}
+	if !slices.Equal(net.DeniedDomains, wantDenied) {
+		t.Errorf("deniedDomains = %q, want %q", net.DeniedDomains, wantDenied)
 	}
 	if len(net.AllowUnixSockets) != 0 || net.AllowAllUnixSockets || net.AllowLocalBinding {
 		t.Errorf("network allows sockets or local binding: %+v", net)
 	}
-	for _, r := range got.Permissions.Allow {
-		if strings.Contains(r, "github") {
-			t.Errorf("permissions.allow names GitHub: %q", r)
+	var wantAllow []string
+	for _, d := range wantEgress {
+		wantAllow = append(wantAllow, "WebFetch(domain:"+d+")")
+	}
+	if !slices.Equal(got.Permissions.Allow, wantAllow) {
+		t.Errorf("permissions.allow = %q, want %q", got.Permissions.Allow, wantAllow)
+	}
+}
+
+// TestT7_2_FakeGhLogIsWritable: the fake gh's call log is inside one of
+// the paths the stage's sandbox lets it write, so a sandboxed live run
+// keeps it (issue #43 R1, work plan 43 D1).
+func TestT7_2_FakeGhLogIsWritable(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	s := newSmoke(t)
+	ws := s.workspace("implement", "-b", branch, "origin/main")
+	dir := filepath.Join(s.root, "run-implement")
+	data, err := os.ReadFile(s.stageSettings(ws, dir))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got claudeSettings
+	if err := json.Unmarshal(data, &got); err != nil {
+		t.Fatal(err)
+	}
+	log := resolve(ghLog(dir))
+	if !slices.ContainsFunc(got.Sandbox.Filesystem.AllowWrite, func(w string) bool {
+		return log == w || strings.HasPrefix(log, w+string(filepath.Separator))
+	}) {
+		t.Errorf("gh log %s is outside allowWrite %q", log, got.Sandbox.Filesystem.AllowWrite)
+	}
+}
+
+// TestT7_2_FakeGhLogsToStageTmp runs the fake gh itself: with
+// AGENT_LOOP_SMOKE_GH_LOG set to the stage's ghLog it appends the call
+// there, in run-<stage>/tmp/gh-calls.log, and nowhere next to the script;
+// unset, the call still works and nothing is logged. ghCalls reads the
+// per-stage logs in implement, review, address order (issue #43 R1, PR #45
+// R1).
+func TestT7_2_FakeGhLogsToStageTmp(t *testing.T) {
+	s := newSmoke(t)
+	gh := filepath.Join(s.ghDir, "gh")
+	ghRun := func(env []string, args ...string) {
+		t.Helper()
+		cmd := exec.Command(gh, args...)
+		cmd.Env = append(os.Environ(), env...)
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("gh %v: %v: %s", args, err, out)
 		}
+	}
+	stageDir := func(st string) string {
+		dir := filepath.Join(s.root, "run-"+st)
+		if err := os.MkdirAll(filepath.Join(dir, "tmp"), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		return dir
+	}
+
+	impl := stageDir("implement")
+	log := filepath.Join(impl, "tmp", "gh-calls.log")
+	if got := ghLog(impl); got != log {
+		t.Fatalf("ghLog(%s) = %s, want %s", impl, got, log)
+	}
+	ghRun([]string{envGhLog + "=" + log}, "issue", "view", itemRef)
+	if data, err := os.ReadFile(log); err != nil || string(data) != "issue view "+itemRef+"\n" {
+		t.Errorf("%s = %q, %v; want the call", log, data, err)
+	}
+	entries, err := os.ReadDir(s.ghDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range entries {
+		if !slices.Contains([]string{"gh", "item.txt", "change.txt"}, e.Name()) {
+			t.Errorf("fake gh wrote %s next to itself, outside the sandbox", e.Name())
+		}
+	}
+
+	// Unset: the call succeeds and no log appears.
+	quiet := stageDir("review")
+	env := slices.DeleteFunc(os.Environ(), func(e string) bool { return strings.HasPrefix(e, envGhLog+"=") })
+	cmd := exec.Command(gh, "pr", "view", changeRef)
+	cmd.Env = env
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("gh pr view without a log: %v: %s", err, out)
+	}
+	if _, err := os.Stat(ghLog(quiet)); !os.IsNotExist(err) {
+		t.Errorf("gh logged with %s unset: %v", envGhLog, err)
+	}
+
+	// ghCalls is in stage order, whatever order the stages logged in.
+	addr := stageDir("address")
+	ghRun([]string{envGhLog + "=" + ghLog(addr)}, "pr", "view", changeRef, "--comments")
+	ghRun([]string{envGhLog + "=" + ghLog(quiet)}, "pr", "view", changeRef)
+	want := "issue view " + itemRef + "\npr view " + changeRef + "\npr view " + changeRef + " --comments\n"
+	if got := s.ghCalls(); got != want {
+		t.Errorf("ghCalls() = %q, want %q", got, want)
+	}
+}
+
+// upstreamSandboxSHA256 is the SHA-256 of internal/runners/sandbox.go in
+// the agent-loop module go.mod requires (agent-loop 7f40ba3), the file
+// liveSettings copies (work plan 43 D2).
+const upstreamSandboxSHA256 = "700554aa9dab32b356a91571503799c4c8fc57dc49946bc964471eb416b2b2a3"
+
+// TestT7_2_SandboxCopyInStep: the sandbox.go that liveSettings copies is
+// the one it was copied from, so bumping agent-loop can't leave the copy
+// stale unnoticed (issue #43 R4).
+func TestT7_2_SandboxCopyInStep(t *testing.T) {
+	out, err := exec.Command("go", "list", "-m", "-f", "{{.Dir}}", "github.com/mayusuk/agent-loop").Output()
+	if err != nil {
+		t.Fatalf("go list agent-loop: %v", err)
+	}
+	dir := strings.TrimSpace(string(out))
+	if dir == "" {
+		t.Fatal("go list agent-loop: no module directory (run go mod download)")
+	}
+	data, err := os.ReadFile(filepath.Join(dir, "internal", "runners", "sandbox.go"))
+	if err != nil {
+		t.Fatalf("agent-loop's sandbox.go: %v", err)
+	}
+	sum := sha256.Sum256(data)
+	if got := hex.EncodeToString(sum[:]); got != upstreamSandboxSHA256 {
+		t.Errorf("agent-loop's internal/runners/sandbox.go changed (sha256 %s, want %s): update liveSettings and its types in e2e/sandbox_test.go to match it, then upstreamSandboxSHA256", got, upstreamSandboxSHA256)
 	}
 }
