@@ -54,3 +54,4 @@ None.
 - `fixLocations` writes the location with `codeSpan` (D2). Tests cover backticks, leading/trailing backticks and control characters.
 - New stage tests cover every D4 bad path form and the 64 KiB boundary after the prefix (exactly 64 KiB is kept, one byte more is failed).
 - No deviations. Runner code is untouched (#19). No follow-up issues.
+- Review round 1 (PR #53): R1 led to `ls-tree` running with `--literal-pathspecs`, so a path with pathspec magic is "not a file" and moves to the body (tests in `gitx` and `stage`). R2 added a symlink and submodule test for D3. R3 pads a code span whose content starts and ends with a space (D2 updated). No pushbacks.
