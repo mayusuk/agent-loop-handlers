@@ -11,7 +11,7 @@ A panic inside `Run.Finish` itself (encoding, `contract.ValidateResult`, or a lo
 
 ## Context
 
-- Plan D2 (`docs/plans/2026-11-15-agent-loop-claude.md`) and FR-18 AC3: the handler always tries to write a result; the exit code is non-zero only when none could be written.
+- Plan D2 (`docs/plans/2026-11-16-agent-loop-claude-first-release-v0-1.md`) and FR-18 AC3: the handler always tries to write a result; the exit code is non-zero only when none could be written.
 - Root cause: `Finish` sets `r.finished = true` and `r.code = ExitNoResult` before calling `finish`. If `finish` panics, the panic reaches `Main`'s deferred recover, which sees `r.finished` and returns `r.code` (1) without writing anything. Reproduced with a run-log writer that panics on the `result rejected` line.
 
 ## Approach
@@ -23,7 +23,7 @@ In `internal/run/run.go`:
 
 ## Steps
 
-- [ ] Tests that fail because of the bug: a run-log writer that panics on the rejection path leaves no result; one that panics on the post-write log line must keep the written result and exit 0; a body panic whose Finish also panics still writes failed.
+- [x] Tests that fail because of the bug: a run-log writer that panics on the rejection path leaves no result; one that panics on the post-write log line must keep the written result and exit 0; a body panic whose Finish also panics still writes failed.
 - [ ] Recover in `Finish`, write the fallback result, log safely.
 
 ## Acceptance criteria
