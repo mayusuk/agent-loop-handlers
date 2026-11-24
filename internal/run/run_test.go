@@ -416,3 +416,133 @@ func TestContractsListsVersionOneZero(t *testing.T) {
 		t.Errorf("Contracts = %v, want [1.0]", Contracts)
 	}
 }
+
+// panickyLog is a run log that panics on the first write containing
+// trigger, to inject a panic into Finish. It panics with value, or with
+// "log write failed" when value is empty.
+type panickyLog struct {
+	bytes.Buffer
+	trigger string
+	value   string
+	fired   bool
+}
+
+func (p *panickyLog) Write(b []byte) (int, error) {
+	if !p.fired && strings.Contains(string(b), p.trigger) {
+		p.fired = true
+		if p.value != "" {
+			panic(p.value)
+		}
+		panic("log write failed")
+	}
+	return p.Buffer.Write(b)
+}
+
+func rejected(*Run) contract.Result {
+	// body_file does not exist in AGENT_LOOP_OUT, so ValidateResult rejects it.
+	return contract.Result{Result: contract.OutcomeDone, Done: &contract.Done{Implement: &contract.ImplementDone{
+		Head:   strings.Repeat("a", 40),
+		Change: &contract.NewChange{Title: "t", BodyFile: "body.md"},
+	}}}
+}
+
+func TestD2_PanicInFinishBeforeWriteWritesFailed(t *testing.T) {
+	f := newFixture(t, inputJSON(contract.StageImplement, "1.0"))
+	log := &panickyLog{trigger: "result rejected"}
+	code := Main(contract.StageImplement, nil, f.getenv, log, rejected)
+	if code != ExitResultWritten {
+		t.Fatalf("exit = %d, want %d; log:\n%s", code, ExitResultWritten, log.String())
+	}
+	if !log.fired {
+		t.Fatal("the injected panic did not fire")
+	}
+	reason := f.failedReason(contract.StageImplement)
+	if reason != "internal error: cannot finish the result: log write failed" {
+		t.Errorf("reason = %q", reason)
+	}
+	if r := f.result(contract.StageImplement); r.RunID != testRunID {
+		t.Errorf("run_id = %q, want %q", r.RunID, testRunID)
+	}
+	if s := log.String(); !strings.Contains(s, "panic in Finish: log write failed") || !strings.Contains(s, "goroutine") {
+		t.Errorf("log has no panic and stack: %q", s)
+	}
+}
+
+func TestD2_PanicInFinishAfterWriteKeepsResult(t *testing.T) {
+	f := newFixture(t, inputJSON(contract.StageImplement, "1.0"))
+	log := &panickyLog{trigger: "result: failed: stage ran"}
+	code := Main(contract.StageImplement, nil, f.getenv, log, ok)
+	if code != ExitResultWritten {
+		t.Fatalf("exit = %d, want %d; log:\n%s", code, ExitResultWritten, log.String())
+	}
+	if !log.fired {
+		t.Fatal("the injected panic did not fire")
+	}
+	if reason := f.failedReason(contract.StageImplement); reason != "stage ran" {
+		t.Errorf("reason = %q, want the written result kept", reason)
+	}
+}
+
+func TestD2_PanicInBodyThenInFinishWritesFailed(t *testing.T) {
+	f := newFixture(t, inputJSON(contract.StageImplement, "1.0"))
+	log := &panickyLog{trigger: "result: failed: internal error: boom"}
+	code := Main(contract.StageImplement, nil, f.getenv, log, func(*Run) contract.Result { panic("boom") })
+	if code != ExitResultWritten {
+		t.Fatalf("exit = %d; log:\n%s", code, log.String())
+	}
+	if reason := f.failedReason(contract.StageImplement); reason != "internal error: boom" {
+		t.Errorf("reason = %q", reason)
+	}
+}
+
+func TestD2_PanicInFinishWithUnwritableResultExitsNonZero(t *testing.T) {
+	f := newFixture(t, inputJSON(contract.StageImplement, "1.0"))
+	f.env[EnvResult] = filepath.Join(t.TempDir(), "missing", "result.json")
+	log := &panickyLog{trigger: "result rejected"}
+	code := Main(contract.StageImplement, nil, f.getenv, log, rejected)
+	if code != ExitNoResult {
+		t.Fatalf("exit = %d, want %d", code, ExitNoResult)
+	}
+	if !strings.Contains(log.String(), "cannot write the failed result") {
+		t.Errorf("log = %q", log.String())
+	}
+}
+
+func TestD2_PanickingLogInMainRecoverDoesNotCrash(t *testing.T) {
+	f := newFixture(t, inputJSON(contract.StageImplement, "1.0"))
+	log := &panickyLog{trigger: "panic: boom"}
+	code := Main(contract.StageImplement, nil, f.getenv, log, func(*Run) contract.Result { panic("boom") })
+	if code != ExitResultWritten {
+		t.Fatalf("exit = %d", code)
+	}
+	if reason := f.failedReason(contract.StageImplement); reason != "internal error: boom" {
+		t.Errorf("reason = %q", reason)
+	}
+}
+
+func TestD2_PanicInFinishFoldsAndCutsFallbackReason(t *testing.T) {
+	f := newFixture(t, inputJSON(contract.StageImplement, "1.0"))
+	value := "line1\nline2\r\n\t" + strings.Repeat("x", 2*contract.MaxFailedReason)
+	log := &panickyLog{trigger: "result rejected", value: value}
+	code := Main(contract.StageImplement, nil, f.getenv, log, rejected)
+	if code != ExitResultWritten {
+		t.Fatalf("exit = %d, want %d; log:\n%s", code, ExitResultWritten, log.String())
+	}
+	if !log.fired {
+		t.Fatal("the injected panic did not fire")
+	}
+	// failedReason also checks that ValidateResult accepts the result.
+	reason := f.failedReason(contract.StageImplement)
+	if strings.ContainsAny(reason, "\r\n\t") {
+		t.Errorf("reason is not folded to one line: %q", reason)
+	}
+	if n := utf8.RuneCountInString(reason); n != contract.MaxFailedReason {
+		t.Errorf("reason has %d runes, want %d", n, contract.MaxFailedReason)
+	}
+	if !strings.HasPrefix(reason, "internal error: cannot finish the result: line1 line2 x") {
+		t.Errorf("reason prefix = %q", reason[:60])
+	}
+	if !strings.HasSuffix(reason, "…") {
+		t.Errorf("reason does not end in an ellipsis: %q", reason)
+	}
+}
