@@ -203,6 +203,30 @@ func TestD4_FileLinesPathspecMagicIsLiteral(t *testing.T) {
 	}
 }
 
+// A symlink is a file with the lines of its link text, and a submodule is
+// not a file (#29 D3).
+func TestD3_FileLinesSymlinkIsAFileSubmoduleIsNot(t *testing.T) {
+	ctx := context.Background()
+	ws, _ := clone(t)
+	base := commit(t, ws, "a.txt")
+	if err := os.Symlink("a.txt", filepath.Join(ws, "l")); err != nil {
+		t.Fatal(err)
+	}
+	run(t, ws, "add", "l")
+	run(t, ws, "update-index", "--add", "--cacheinfo", "160000,"+base+",sub")
+	run(t, ws, "commit", "-q", "-m", "links")
+	head := run(t, ws, "rev-parse", "HEAD")
+	if mode := strings.Fields(run(t, ws, "ls-tree", head, "--", "l"))[0]; mode != "120000" {
+		t.Fatalf("l has mode %s, want a symlink (120000)", mode)
+	}
+	if n, ok, err := FileLines(ctx, ws, head, "l"); n != 1 || !ok || err != nil {
+		t.Errorf("FileLines(symlink) = %d, %v, %v; want 1, true", n, ok, err)
+	}
+	if n, ok, err := FileLines(ctx, ws, head, "sub"); n != 0 || ok || err != nil {
+		t.Errorf("FileLines(submodule) = %d, %v, %v; want 0, false", n, ok, err)
+	}
+}
+
 // A git failure is an error, never "not a file" (work plan #7 D5, #29).
 func TestD5_FileLinesGitFailureIsAnError(t *testing.T) {
 	ws, _ := clone(t)
