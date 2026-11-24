@@ -3,7 +3,7 @@
 **Issue:** [#16](https://github.com/mayusuk/agent-loop-handlers/issues/16) (bug)
 **Branch:** `issue/16-write-a-failed-result-when-finish`
 **Base:** `origin/main @ f463d09` (checked before branching)
-**Status:** Draft
+**Status:** Done
 
 ## Summary
 
@@ -24,7 +24,7 @@ In `internal/run/run.go`:
 ## Steps
 
 - [x] Tests that fail because of the bug: a run-log writer that panics on the rejection path leaves no result; one that panics on the post-write log line must keep the written result and exit 0; a body panic whose Finish also panics still writes failed.
-- [ ] Recover in `Finish`, write the fallback result, log safely.
+- [x] Recover in `Finish`, write the fallback result, log safely.
 
 ## Acceptance criteria
 
@@ -47,4 +47,4 @@ None.
 
 ## Outcome
 
-_Filled in before shipping._
+`Finish` recovers its own panic: it keeps a result already written (exit 0), or writes a minimal failed result through `writeFallback` (exit 0), or exits 1 if even that cannot be written. Recover paths log through `safeLogf`, so a panicking run log cannot crash the handler. Five tests cover the cases: panic before the write, after the write, in Finish after a body panic, with an unwritable result path, and in `Main`'s recover log. No deviations from the approach; no follow-up issues.

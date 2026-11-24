@@ -57,6 +57,7 @@ type Run struct {
 
 	stderr   io.Writer
 	finished bool
+	written  bool
 	code     int
 }
 
@@ -81,7 +82,7 @@ func Main(stage contract.Stage, args []string, getenv func(string) string, stder
 	}
 	defer func() {
 		if p := recover(); p != nil {
-			r.logf("panic: %v\n%s", p, debug.Stack())
+			r.safeLogf("panic: %v\n%s", p, debug.Stack())
 			if r.finished {
 				code = r.code
 				return
@@ -175,16 +176,55 @@ func lenientRunID(data []byte) string {
 // the exit code. It sets contract_version and run_id, which the handler
 // owns. A result that contract.ValidateResult rejects is replaced by the
 // failed result it returns. Finish writes at most once per run; a later
-// call is logged and returns the first call's exit code.
-func (r *Run) Finish(res contract.Result) int {
+// call is logged and returns the first call's exit code. A panic inside
+// Finish keeps a result already written, and otherwise writes a minimal
+// failed result (plan D2).
+func (r *Run) Finish(res contract.Result) (code int) {
 	if r.finished {
 		r.logf("internal error: Finish called twice; the first result stands")
 		return r.code
 	}
 	r.finished = true
 	r.code = ExitNoResult // until the write succeeds, in case finish panics
+	defer func() {
+		if p := recover(); p != nil {
+			stack := debug.Stack()
+			if r.written {
+				r.code = ExitResultWritten
+			} else {
+				r.code = r.writeFallback(p)
+			}
+			code = r.code
+			r.safeLogf("panic in Finish: %v\n%s", p, stack)
+		}
+	}()
 	r.code = r.finish(res)
 	return r.code
+}
+
+// writeFallback writes a minimal failed result after a panic in Finish. It
+// skips ValidateResult, which may be what panicked: the result is
+// schema-valid by construction. It never panics.
+func (r *Run) writeFallback(p any) (code int) {
+	defer func() {
+		if q := recover(); q != nil {
+			r.safeLogf("cannot write the failed result: panic: %v", q)
+			code = ExitNoResult
+		}
+	}()
+	res := Failed(fmt.Sprintf("internal error: cannot finish the result: %v", p))
+	res.ContractVersion, res.RunID = contract.Version, r.Input.RunID
+	data, err := json.Marshal(res)
+	if err == nil {
+		err = writeAtomic(r.ResultPath, append(data, '\n'))
+	}
+	if err != nil {
+		r.safeLogf("cannot write the failed result: %v", err)
+		return ExitNoResult
+	}
+	r.written = true
+	r.safeLogf("result: failed: %s", res.Failed.Reason)
+	return ExitResultWritten
 }
 
 func (r *Run) finish(res contract.Result) int {
@@ -214,6 +254,7 @@ func (r *Run) finish(res contract.Result) int {
 		r.logf("cannot write the result: %v", err)
 		return ExitNoResult
 	}
+	r.written = true
 	if res.Failed != nil {
 		r.logf("result: failed: %s", res.Failed.Reason)
 	} else {
@@ -284,6 +325,12 @@ func (r *Run) Logf(format string, a ...any) { r.logf(format, a...) }
 
 // Log is the run log (stderr), for output such as claude's and git's.
 func (r *Run) Log() io.Writer { return r.stderr }
+
+// safeLogf is logf for recover paths: a panic in the run log is dropped.
+func (r *Run) safeLogf(format string, a ...any) {
+	defer func() { _ = recover() }()
+	r.logf(format, a...)
+}
 
 func (r *Run) logf(format string, a ...any) {
 	fmt.Fprintf(r.stderr, "agent-loop-claude %s: %s\n", r.Stage, fmt.Sprintf(format, a...))
