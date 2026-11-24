@@ -48,3 +48,5 @@ None.
 ## Outcome
 
 `Finish` recovers its own panic: it keeps a result already written (exit 0), or writes a minimal failed result through `writeFallback` (exit 0), or exits 1 if even that cannot be written. Recover paths log through `safeLogf`, so a panicking run log cannot crash the handler. Five tests cover the cases: panic before the write, after the write, in Finish after a body panic, with an unwritable result path, and in `Main`'s recover log. No deviations from the approach; no follow-up issues.
+
+Review round 1: R2 led to `TestD2_PanicInFinishFoldsAndCutsFallbackReason`, which checks a multi-line, over-long panic value is folded to one line and cut to `MaxFailedReason` runes with an ellipsis. R1 (CI pending) needed no change: both CI jobs passed on 863f154. No pushbacks.
