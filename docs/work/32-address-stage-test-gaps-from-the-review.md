@@ -3,7 +3,7 @@
 **Issue:** [#32](https://github.com/mayusuk/agent-loop-handlers/issues/32) (bug)
 **Branch:** `issue/32-address-stage-test-gaps-from-the-review`
 **Base:** `origin/main @ 7a85584` (checked before branching)
-**Status:** Draft
+**Status:** Done
 
 ## Summary
 
@@ -44,4 +44,4 @@ None.
 
 ## Outcome
 
-_Filled in before shipping: what was done, deviations from this work plan's approach and why, follow-up issues filed. Details the specs should record go in Decisions, not here._
+Added the four missing cases and the rename in `internal/stage/address_test.go`, as planned. All passed against the existing code, so no production change was needed. No follow-up issues.

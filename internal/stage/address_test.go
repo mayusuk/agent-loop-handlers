@@ -140,7 +140,9 @@ func TestD4_AddressHeadNotBuildingOnTheInputIsFailed(t *testing.T) {
 	f.unpushed(f.head)
 }
 
-func TestD2_AddressWithoutAddressObjectIsFailed(t *testing.T) {
+// TestI5_2_AddressWithoutAddressObjectIsFailed: an address run carries an
+// address object (INTEGRATION-SPEC §5.2 address).
+func TestI5_2_AddressWithoutAddressObjectIsFailed(t *testing.T) {
 	f := newFixture(t, true)
 	in := f.addressInput(contract.ModeFindings)
 	in.Address = nil
@@ -225,6 +227,14 @@ func TestFR5AC6_WrongShapeIsFailedAndNotPushed(t *testing.T) {
 			`true`,
 			"no merge commit since %HEAD%",
 		},
+		"merge with its parents reversed": {
+			"git reset -q --hard $(git commit-tree -p origin/main -p HEAD -m reversed 'HEAD^{tree}')",
+			"is not one merge commit on %HEAD%: its first parent is %BASE%",
+		},
+		"merge of three parents": {
+			"git reset -q --hard $(git commit-tree -p HEAD -p origin/main -p origin/main~1 -m octopus 'HEAD^{tree}')",
+			"is not a merge commit of two parents (it has 3)",
+		},
 		"merge of an older base": {
 			"git reset -q --hard $(git commit-tree -p HEAD -p origin/main~1 -m older 'HEAD^{tree}')",
 			"does not contain base tip",
@@ -240,7 +250,8 @@ func TestFR5AC6_WrongShapeIsFailedAndNotPushed(t *testing.T) {
 			f := newBaseFixture(t)
 			o := f.address(f.addressInput(contract.ModeBaseUpdate), c.shell+` && `+draftOnly, noReplies)
 			r := failedReason(t, o)
-			if want := strings.ReplaceAll(c.want, "%HEAD%", f.head); !strings.Contains(r, want) || !strings.HasSuffix(r, "; nothing was pushed") {
+			want := strings.NewReplacer("%HEAD%", f.head, "%BASE%", f.baseTip).Replace(c.want)
+			if !strings.Contains(r, want) || !strings.HasSuffix(r, "; nothing was pushed") {
 				t.Errorf("reason = %q, want it to contain %q", r, want)
 			}
 			f.unpushed(f.head)
@@ -257,14 +268,38 @@ func TestFR5AC6_BaseUpdateRepliesAreFailed(t *testing.T) {
 	f.unpushed(f.head)
 }
 
-func TestD2_BaseUpdateWithoutBaseTipIsFailed(t *testing.T) {
-	f := newBaseFixture(t)
-	in := f.addressInput(contract.ModeBaseUpdate)
-	in.Change = nil
-	if r := failedReason(t, f.address(in, `touch ran && `+draftOnly, noReplies)); r != "a base_update address run needs change.base_tip" {
-		t.Errorf("reason = %q", r)
+// TestD3_BaseUpdateBlockedAndNeedsOwnerPushNothing: blocked and
+// needs_owner are allowed in base_update mode and push nothing, even
+// after the agent merged the base (work plan #8 D3, FR-18 AC1).
+func TestD3_BaseUpdateBlockedAndNeedsOwnerPushNothing(t *testing.T) {
+	for name, draft := range map[string]string{"blocked": blockedDraft, "needs_owner": needsOwnerDraft} {
+		t.Run(name, func(t *testing.T) {
+			f := newBaseFixture(t)
+			o := f.address(f.addressInput(contract.ModeBaseUpdate), mergeBase+` && `+draftOnly, draft)
+			if string(o.res.Result) != name {
+				t.Fatalf("result = %s, want %s\n%s", o.res.Result, name, o.stderr)
+			}
+			f.unpushed(f.head)
+		})
 	}
-	if _, err := os.Stat(filepath.Join(f.ws, "ran")); err == nil {
-		t.Errorf("claude ran")
+}
+
+func TestD2_BaseUpdateWithoutBaseTipIsFailed(t *testing.T) {
+	cases := map[string]func(*contract.Input){
+		"no change":      func(in *contract.Input) { in.Change = nil },
+		"empty base_tip": func(in *contract.Input) { in.Change.BaseTip = "" },
+	}
+	for name, edit := range cases {
+		t.Run(name, func(t *testing.T) {
+			f := newBaseFixture(t)
+			in := f.addressInput(contract.ModeBaseUpdate)
+			edit(&in)
+			if r := failedReason(t, f.address(in, `touch ran && `+draftOnly, noReplies)); r != "a base_update address run needs change.base_tip" {
+				t.Errorf("reason = %q", r)
+			}
+			if _, err := os.Stat(filepath.Join(f.ws, "ran")); err == nil {
+				t.Errorf("claude ran")
+			}
+		})
 	}
 }
