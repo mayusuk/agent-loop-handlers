@@ -281,6 +281,72 @@ func TestT7_2_FakeGhLogIsWritable(t *testing.T) {
 	}
 }
 
+// TestT7_2_FakeGhLogsToStageTmp runs the fake gh itself: with
+// AGENT_LOOP_SMOKE_GH_LOG set to the stage's ghLog it appends the call
+// there, in run-<stage>/tmp/gh-calls.log, and nowhere next to the script;
+// unset, the call still works and nothing is logged. ghCalls reads the
+// per-stage logs in implement, review, address order (issue #43 R1, PR #45
+// R1).
+func TestT7_2_FakeGhLogsToStageTmp(t *testing.T) {
+	s := newSmoke(t)
+	gh := filepath.Join(s.ghDir, "gh")
+	ghRun := func(env []string, args ...string) {
+		t.Helper()
+		cmd := exec.Command(gh, args...)
+		cmd.Env = append(os.Environ(), env...)
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("gh %v: %v: %s", args, err, out)
+		}
+	}
+	stageDir := func(st string) string {
+		dir := filepath.Join(s.root, "run-"+st)
+		if err := os.MkdirAll(filepath.Join(dir, "tmp"), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		return dir
+	}
+
+	impl := stageDir("implement")
+	log := filepath.Join(impl, "tmp", "gh-calls.log")
+	if got := ghLog(impl); got != log {
+		t.Fatalf("ghLog(%s) = %s, want %s", impl, got, log)
+	}
+	ghRun([]string{envGhLog + "=" + log}, "issue", "view", itemRef)
+	if data, err := os.ReadFile(log); err != nil || string(data) != "issue view "+itemRef+"\n" {
+		t.Errorf("%s = %q, %v; want the call", log, data, err)
+	}
+	entries, err := os.ReadDir(s.ghDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range entries {
+		if !slices.Contains([]string{"gh", "item.txt", "change.txt"}, e.Name()) {
+			t.Errorf("fake gh wrote %s next to itself, outside the sandbox", e.Name())
+		}
+	}
+
+	// Unset: the call succeeds and no log appears.
+	quiet := stageDir("review")
+	env := slices.DeleteFunc(os.Environ(), func(e string) bool { return strings.HasPrefix(e, envGhLog+"=") })
+	cmd := exec.Command(gh, "pr", "view", changeRef)
+	cmd.Env = env
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("gh pr view without a log: %v: %s", err, out)
+	}
+	if _, err := os.Stat(ghLog(quiet)); !os.IsNotExist(err) {
+		t.Errorf("gh logged with %s unset: %v", envGhLog, err)
+	}
+
+	// ghCalls is in stage order, whatever order the stages logged in.
+	addr := stageDir("address")
+	ghRun([]string{envGhLog + "=" + ghLog(addr)}, "pr", "view", changeRef, "--comments")
+	ghRun([]string{envGhLog + "=" + ghLog(quiet)}, "pr", "view", changeRef)
+	want := "issue view " + itemRef + "\npr view " + changeRef + "\npr view " + changeRef + " --comments\n"
+	if got := s.ghCalls(); got != want {
+		t.Errorf("ghCalls() = %q, want %q", got, want)
+	}
+}
+
 // upstreamSandboxSHA256 is the SHA-256 of internal/runners/sandbox.go in
 // the agent-loop module go.mod requires (agent-loop 7f40ba3), the file
 // liveSettings copies (work plan 43 D2).
