@@ -157,7 +157,8 @@ func TestPlanT8_SettingsWithoutSandboxAreFailed(t *testing.T) {
 // TestPlanT8_AddressStageIsSandboxed: the address stage passes the
 // settings to claude, and fails before claude starts without them or with
 // settings that don't keep it sandboxed, like implement and review (plan
-// T8, #35 R1).
+// T8, #35 R1). --unsandboxed runs without settings but keeps any it is
+// given (work plan #9 D3).
 func TestPlanT8_AddressStageIsSandboxed(t *testing.T) {
 	f := newFixture(t, true)
 	settings := sandboxSettings(t)
@@ -214,5 +215,20 @@ func TestPlanT8_AddressStageIsSandboxed(t *testing.T) {
 	}
 	if !strings.Contains(o.stderr, claude.UnsandboxedWarning) {
 		t.Errorf("no warning in the run log:\n%s", o.stderr)
+	}
+
+	// --unsandboxed doesn't drop settings the runner gave (work plan #9 D3).
+	f = newFixture(t, true)
+	f.flags = prompt.Flags{Unsandboxed: true}
+	rec = filepath.Join(t.TempDir(), "rec.json")
+	o = f.address(f.addressInput(contract.ModeFindings), draftOnly, repliesAll, "FAKECLAUDE_RECORD", rec, claude.EnvSettings, settings)
+	if o.res.Result != contract.OutcomeDone {
+		t.Fatalf("unsandboxed with settings result = %s: %+v\n%s", o.res.Result, o.res.Failed, o.stderr)
+	}
+	if got, ok := settingsArg(recordedArgs(t, rec)); !ok || got != settings {
+		t.Errorf("unsandboxed with settings: --settings = %q (%v), want %q", got, ok, settings)
+	}
+	if strings.Contains(o.stderr, claude.UnsandboxedWarning) {
+		t.Errorf("unsandboxed with settings: logged the unsandboxed warning")
 	}
 }
