@@ -322,27 +322,46 @@ func TestD5_UsageKeptWhenRunTimesOut(t *testing.T) {
 	}
 }
 
-// Work plan #19 D2: claude ends on its own before the stop time, but a
-// child keeps its stderr open past both the stop time and the grace
-// period. The run is reported by claude's exit status, not as a time limit.
+// Work plan #19 D2: claude ends on its own before the stop time, or
+// before the caller cancels its context, but a child keeps its stderr open
+// past that point and past the grace period. The run is reported by
+// claude's exit status, not as a time limit or the caller's cancellation.
 func TestFR18AC4_ExitBeforeStopTimeWhilePipesDrainIsNotTimeLimit(t *testing.T) {
 	for _, tc := range []struct {
-		name string
-		exit string
-		code int // -2: no error
+		name   string
+		exit   string
+		code   int  // -2: no error
+		cancel bool // cancel the caller's context instead of a stop time
 	}{
-		{"exit 0", "0", -2},
-		{"exit 3", "3", 3},
+		{"stop time, exit 0", "0", -2, false},
+		{"stop time, exit 3", "3", 3, false},
+		{"caller cancels, exit 0", "0", -2, true},
+		{"caller cancels, exit 3", "3", 3, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			pidfile := filepath.Join(t.TempDir(), "child.pid")
-			out, err := Run(context.Background(), Options{
+			ctx := context.Background()
+			opts := Options{
 				Bin: fakeBin, Args: Args("p", ""), Dir: t.TempDir(),
 				Env:    env("FAKECLAUDE_SHELL=sleep 60 >&2 & printf %s $! >"+pidfile, "FAKECLAUDE_EXIT="+tc.exit),
 				Stderr: &bytes.Buffer{},
-				StopAt: time.Now().Add(time.Second),
 				Grace:  2 * time.Second,
-			})
+			}
+			if tc.cancel {
+				var cancel context.CancelFunc
+				ctx, cancel = context.WithCancel(ctx)
+				defer cancel()
+				time.AfterFunc(500*time.Millisecond, cancel)
+			} else {
+				opts.StopAt = time.Now().Add(time.Second)
+			}
+			out, err := Run(ctx, opts)
+			if tc.cancel && ctx.Err() == nil {
+				t.Fatal("the caller's context was not cancelled during the run")
+			}
+			if errors.Is(err, ErrTimeLimit) || errors.Is(err, context.Canceled) {
+				t.Fatalf("err = %v, want claude's own exit status", err)
+			}
 			if tc.code == -2 {
 				if err != nil {
 					t.Fatalf("err = %v, want none", err)
