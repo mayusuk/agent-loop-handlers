@@ -114,8 +114,8 @@ func repoPath(p string) bool {
 // codeSpan writes s as one Markdown code span on one line (#29 D2):
 // control characters are escaped as in Go (\n, \t, \x01), and the
 // backtick fence is one longer than the longest run of backticks in s,
-// with a space inside each end when s starts or ends with a backtick, as
-// CommonMark requires.
+// with a space inside each end when s starts or ends with a backtick, or
+// starts and ends with a space, as CommonMark requires.
 func codeSpan(s string) string {
 	var b strings.Builder
 	run, longest := 0, 0
@@ -134,7 +134,12 @@ func codeSpan(s string) string {
 		b.WriteRune(c)
 	}
 	text := b.String()
-	if strings.HasPrefix(text, "`") || strings.HasSuffix(text, "`") {
+	edge := strings.HasPrefix(text, "`") || strings.HasSuffix(text, "`")
+	// CommonMark strips one space from each end of content that starts
+	// and ends with a space and is not all spaces, so pad it to keep the
+	// path as it is (#29 review R3).
+	spaced := strings.HasPrefix(text, " ") && strings.HasSuffix(text, " ") && strings.Trim(text, " ") != ""
+	if edge || spaced {
 		text = " " + text + " "
 	}
 	fence := strings.Repeat("`", longest+1)

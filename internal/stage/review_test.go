@@ -268,6 +268,16 @@ func TestD8_LocationLineSurvivesBackticksAndNewlines(t *testing.T) {
 	}
 }
 
+// A path with a space at each end keeps both spaces in the Location line
+// (#29 review R3, D2).
+func TestD8_LocationLineKeepsEdgeSpaces(t *testing.T) {
+	f := newReviewFixture(t)
+	o := f.review(draftOnly, reviewDraft(`{"score":3,"path":" src.go ","title":"t","body":"b"}`))
+	if b, want := body(t, o, reviewDone(t, o).NewFindings[0]), "Location: `  src.go  `\n\nb"; b != want {
+		t.Errorf("body = %q, want %q", b, want)
+	}
+}
+
 func TestD8_CodeSpan(t *testing.T) {
 	for in, want := range map[string]string{
 		"a.go":            "`a.go`",
@@ -277,6 +287,11 @@ func TestD8_CodeSpan(t *testing.T) {
 		"a`":              "`` a` ``",
 		"a\nb\tc\x01\x7f": "`a\\nb\\tc\\x01\\x7f`",
 		"a\r\n":           "`a\\r\\n`",
+		" a.go ":          "`  a.go  `",
+		" a.go":           "` a.go`",
+		"a.go ":           "`a.go `",
+		" a` ":            "``  a`  ``",
+		" `a":             "`` `a``",
 	} {
 		if got := codeSpan(in); got != want {
 			t.Errorf("codeSpan(%q) = %q, want %q", in, got, want)
