@@ -170,6 +170,39 @@ func TestFileLines(t *testing.T) {
 	}
 }
 
+// A path with pathspec magic is read literally: it is a file only when a
+// file of exactly that name is at the commit, and never a git error that
+// would fail the review (work plan #7 D4, #29 review R1).
+func TestD4_FileLinesPathspecMagicIsLiteral(t *testing.T) {
+	ctx := context.Background()
+	ws, _ := clone(t)
+	os.WriteFile(filepath.Join(ws, "src.go"), []byte("a\nb\n"), 0o644)
+	os.WriteFile(filepath.Join(ws, ":(glob)lit.go"), []byte("x\n"), 0o644)
+	run(t, ws, "add", "--", "src.go", ":(literal):(glob)lit.go")
+	run(t, ws, "commit", "-q", "-m", "files")
+	head := run(t, ws, "rev-parse", "HEAD")
+	for _, c := range []struct {
+		path string
+		n    int
+		ok   bool
+	}{
+		{":(bad)src.go", 0, false},
+		{":!src.go", 0, false},
+		{":(exclude)src.go", 0, false},
+		{":(glob)src.go", 0, false},
+		{":(icase)SRC.go", 0, false},
+		{":/src.go", 0, false},
+		{":src.go", 0, false},
+		{":(glob)lit.go", 1, true},
+		{"src.go", 2, true},
+	} {
+		n, ok, err := FileLines(ctx, ws, head, c.path)
+		if err != nil || n != c.n || ok != c.ok {
+			t.Errorf("FileLines(%s) = %d, %v, %v; want %d, %v", c.path, n, ok, err, c.n, c.ok)
+		}
+	}
+}
+
 // A git failure is an error, never "not a file" (work plan #7 D5, #29).
 func TestD5_FileLinesGitFailureIsAnError(t *testing.T) {
 	ws, _ := clone(t)

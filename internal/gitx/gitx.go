@@ -165,14 +165,16 @@ func FileLines(ctx context.Context, dir, commit, path string) (n int, ok bool, e
 
 // isBlob reports whether path names a blob in commit's tree. ls-tree
 // exits 0 with no entry for a missing path, so only a real failure is an
-// error. ls-tree matches paths literally, not as globs, and the entry
-// must match path exactly, so "dir/" listing the files under dir does not
+// error. --literal-pathspecs makes git read path as a plain name, never
+// as pathspec magic such as ":(bad)x" or ":!x", which would otherwise
+// make git exit 128 and fail the review (#29 review R1). The entry must
+// match path exactly, so "dir/" listing the files under dir does not
 // count.
 func isBlob(ctx context.Context, dir, commit, path string) (bool, error) {
 	if path == "" {
 		return false, nil
 	}
-	out, err := Git(ctx, dir, "ls-tree", "-z", "--full-tree", commit, "--", path)
+	out, err := Git(ctx, dir, "--literal-pathspecs", "ls-tree", "-z", "--full-tree", commit, "--", path)
 	if err != nil {
 		return false, err
 	}

@@ -231,6 +231,28 @@ func TestD8_BadPathFormsMoveToTheBody(t *testing.T) {
 	}
 }
 
+// A path with pathspec magic is not a file at the commit, so its location
+// moves to the body and the review is not failed (#29 review R1).
+func TestD8_PathspecMagicMovesToTheBody(t *testing.T) {
+	paths := []string{":(bad)src.go", ":!src.go", ":(glob)src.go", ":/src.go"}
+	var findings []string
+	for i, p := range paths {
+		findings = append(findings, fmt.Sprintf(`{"score":3,"path":%q,"line":1,"title":"t%d","body":"b"}`, p, i))
+	}
+	f := newReviewFixture(t)
+	o := f.review(draftOnly, reviewDraft(strings.Join(findings, ",")))
+	d := reviewDone(t, o)
+	for i, p := range paths {
+		nf := d.NewFindings[i]
+		if nf.Path != nil || nf.Line != nil {
+			t.Errorf("%s: finding = %+v, want no path or line", p, nf)
+		}
+		if b, want := body(t, o, nf), "Location: `"+p+":1`\n\nb"; b != want {
+			t.Errorf("%s: body = %q, want %q", p, b, want)
+		}
+	}
+}
+
 // A backtick or a control character in the path keeps the Location line
 // one line and one code span (#29 R4, D2).
 func TestD8_LocationLineSurvivesBackticksAndNewlines(t *testing.T) {
