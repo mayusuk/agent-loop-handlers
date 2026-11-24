@@ -338,7 +338,7 @@ func TestFR18AC4_ExitBeforeStopTimeWhilePipesDrainIsNotTimeLimit(t *testing.T) {
 			pidfile := filepath.Join(t.TempDir(), "child.pid")
 			out, err := Run(context.Background(), Options{
 				Bin: fakeBin, Args: Args("p", ""), Dir: t.TempDir(),
-				Env:    env("FAKECLAUDE_SHELL=sleep 60 >&2 & echo $! >"+pidfile, "FAKECLAUDE_EXIT="+tc.exit),
+				Env:    env("FAKECLAUDE_SHELL=sleep 60 >&2 & printf %s $! >"+pidfile, "FAKECLAUDE_EXIT="+tc.exit),
 				Stderr: &bytes.Buffer{},
 				StopAt: time.Now().Add(time.Second),
 				Grace:  2 * time.Second,

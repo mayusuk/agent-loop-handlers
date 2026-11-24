@@ -3,7 +3,7 @@
 **Issue:** [#19](https://github.com/mayusuk/agent-loop-handlers/issues/19) (bug)
 **Branch:** `issue/19-runner-edge-cases-from-the-review-of-18`
 **Base:** `origin/main @ ef6eb47` (checked before branching)
-**Status:** Draft
+**Status:** Done
 
 ## Summary
 
@@ -25,7 +25,7 @@ Closes four edge cases in `internal/claude.Run` and `ParseUsage` found in the re
 ## Steps
 
 - [x] Failing tests: R4 (exit 0 / exit 3 with a child holding stderr past the stop time), R3 (overflowing input tokens), plus R1 (killed by signal) and R2 (usage kept on timeout, with `FAKECLAUDE_OUTPUT_FIRST`).
-- [ ] Fix `Run` and `usageFrom`.
+- [x] Fix `Run` and `usageFrom`.
 
 ## Acceptance criteria
 
@@ -49,4 +49,4 @@ Between claude exiting and Go reaping it (microseconds) a stop still counts as a
 
 ## Outcome
 
-_Filled in before shipping: what was done, deviations from this work plan's approach and why, follow-up issues filed. Details the specs should record go in Decisions, not here._
+Done as planned. R1 and R2 already behaved correctly and now have tests; R3 and R4 were reproduced by failing tests and fixed in `internal/claude/claude.go`. The fake gained `FAKECLAUDE_OUTPUT_FIRST` for R2. No follow-up issues.
