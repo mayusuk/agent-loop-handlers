@@ -33,9 +33,9 @@ func (f *fixture) addressInput(mode contract.AddressMode) contract.Input {
 	return in
 }
 
-func (f *fixture) address(in contract.Input, shell, draft string) outcome {
+func (f *fixture) address(in contract.Input, shell, draft string, extra ...string) outcome {
 	f.t.Helper()
-	return f.runStage(in, Address, shell, draft)
+	return f.runStage(in, Address, shell, draft, extra...)
 }
 
 func addressDone(t *testing.T, o outcome) *contract.AddressDone {

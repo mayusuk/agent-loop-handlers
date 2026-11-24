@@ -90,8 +90,10 @@ their path in `AGENT_LOOP_CLAUDE_SETTINGS`. `agent-loop-claude` hands them to `c
 `--settings`, runs it with `--permission-mode acceptEdits`, and never with
 `--dangerously-skip-permissions` (plan D12, TECHNICAL-SPEC §7.2). It refuses to start, with a `failed`
 result, when the settings are missing (`no sandbox settings: AGENT_LOOP_CLAUDE_SETTINGS is not
-set`) or don't set both `sandbox.enabled` and `sandbox.failIfUnavailable` to true (`sandbox
-settings <path>: sandbox.enabled is not true`, or the same for `sandbox.failIfUnavailable`).
+set`), don't set both `sandbox.enabled` and `sandbox.failIfUnavailable` to true (`sandbox
+settings <path>: sandbox.enabled is not true`, or the same for `sandbox.failIfUnavailable`), or
+don't set `sandbox.allowUnsandboxedCommands` to false (`sandbox settings <path>:
+sandbox.allowUnsandboxedCommands is not false`), so no command can run outside the sandbox.
 
 To run without the sandbox, set `runner = "local-unsandboxed"` and add `--unsandboxed` to the
 command. Claude then has your full user access: your files, any network address and agent-loop's

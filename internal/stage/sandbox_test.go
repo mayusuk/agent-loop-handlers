@@ -131,13 +131,17 @@ func TestPlanT8_SettingsWithoutSandboxAreFailed(t *testing.T) {
 		"disabled":      `{"sandbox":{"enabled":false,"failIfUnavailable":true}}`,
 		"no sandbox":    `{"permissions":{}}`,
 		"may fall back": `{"sandbox":{"enabled":true}}`,
-		"not json":      `nope`,
+		// Commands may retry outside the sandbox (#35 D1).
+		"unsandboxed commands": `{"sandbox":{"enabled":true,"failIfUnavailable":true,"allowUnsandboxedCommands":true}}`,
+		"not json":             `nope`,
 	} {
 		for _, unsandboxed := range []bool{false, true} {
 			f := newFixture(t, false)
 			f.flags = prompt.Flags{Unsandboxed: unsandboxed}
 			p := filepath.Join(t.TempDir(), "settings.json")
-			os.WriteFile(p, []byte(data), 0o644)
+			if err := os.WriteFile(p, []byte(data), 0o644); err != nil {
+				t.Fatal(err)
+			}
 			rec := filepath.Join(t.TempDir(), "rec.json")
 			o := f.implement(commitAndDraft, doneDraft, "FAKECLAUDE_RECORD", rec, claude.EnvSettings, p)
 			if r := failedReason(t, o); !strings.HasPrefix(r, "sandbox settings "+p+": ") {
@@ -147,5 +151,84 @@ func TestPlanT8_SettingsWithoutSandboxAreFailed(t *testing.T) {
 				t.Errorf("%s (unsandboxed %v): claude ran", name, unsandboxed)
 			}
 		}
+	}
+}
+
+// TestPlanT8_AddressStageIsSandboxed: the address stage passes the
+// settings to claude, and fails before claude starts without them or with
+// settings that don't keep it sandboxed, like implement and review (plan
+// T8, #35 R1). --unsandboxed runs without settings but keeps any it is
+// given (work plan #9 D3).
+func TestPlanT8_AddressStageIsSandboxed(t *testing.T) {
+	f := newFixture(t, true)
+	settings := sandboxSettings(t)
+	rec := filepath.Join(t.TempDir(), "rec.json")
+	o := f.address(f.addressInput(contract.ModeFindings), draftOnly, repliesAll, "FAKECLAUDE_RECORD", rec, claude.EnvSettings, settings)
+	if o.res.Result != contract.OutcomeDone {
+		t.Fatalf("result = %s: %+v\n%s", o.res.Result, o.res.Failed, o.stderr)
+	}
+	if got, ok := settingsArg(recordedArgs(t, rec)); !ok || got != settings {
+		t.Errorf("--settings = %q (%v), want %q", got, ok, settings)
+	}
+	if strings.Contains(o.stderr, claude.UnsandboxedWarning) {
+		t.Errorf("a sandboxed run logged the unsandboxed warning")
+	}
+
+	f = newFixture(t, true)
+	rec = filepath.Join(t.TempDir(), "rec.json")
+	o = f.address(f.addressInput(contract.ModeFindings), commitAndDraft, repliesAll, "FAKECLAUDE_RECORD", rec, claude.EnvSettings, "")
+	if r := failedReason(t, o); !strings.HasPrefix(r, "no sandbox settings") {
+		t.Errorf("no settings: reason = %q", r)
+	}
+	if _, err := os.Stat(rec); !os.IsNotExist(err) {
+		t.Errorf("no settings: claude ran: %v", err)
+	}
+	f.unpushed(f.head)
+
+	for _, unsandboxed := range []bool{false, true} {
+		f = newFixture(t, true)
+		f.flags = prompt.Flags{Unsandboxed: unsandboxed}
+		p := filepath.Join(t.TempDir(), "settings.json")
+		if err := os.WriteFile(p, []byte(`{"sandbox":{"enabled":true,"failIfUnavailable":true,"allowUnsandboxedCommands":true}}`), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		rec = filepath.Join(t.TempDir(), "rec.json")
+		o = f.address(f.addressInput(contract.ModeFindings), commitAndDraft, repliesAll, "FAKECLAUDE_RECORD", rec, claude.EnvSettings, p)
+		if r := failedReason(t, o); r != "sandbox settings "+p+": sandbox.allowUnsandboxedCommands is not false" {
+			t.Errorf("unsandboxed %v: reason = %q", unsandboxed, r)
+		}
+		if _, err := os.Stat(rec); !os.IsNotExist(err) {
+			t.Errorf("unsandboxed %v: claude ran", unsandboxed)
+		}
+		f.unpushed(f.head)
+	}
+
+	f = newFixture(t, true)
+	f.flags = prompt.Flags{Unsandboxed: true}
+	rec = filepath.Join(t.TempDir(), "rec.json")
+	o = f.address(f.addressInput(contract.ModeFindings), draftOnly, repliesAll, "FAKECLAUDE_RECORD", rec, claude.EnvSettings, "")
+	if o.res.Result != contract.OutcomeDone {
+		t.Fatalf("unsandboxed result = %s: %+v\n%s", o.res.Result, o.res.Failed, o.stderr)
+	}
+	if _, ok := settingsArg(recordedArgs(t, rec)); ok {
+		t.Errorf("an unsandboxed run got --settings")
+	}
+	if !strings.Contains(o.stderr, claude.UnsandboxedWarning) {
+		t.Errorf("no warning in the run log:\n%s", o.stderr)
+	}
+
+	// --unsandboxed doesn't drop settings the runner gave (work plan #9 D3).
+	f = newFixture(t, true)
+	f.flags = prompt.Flags{Unsandboxed: true}
+	rec = filepath.Join(t.TempDir(), "rec.json")
+	o = f.address(f.addressInput(contract.ModeFindings), draftOnly, repliesAll, "FAKECLAUDE_RECORD", rec, claude.EnvSettings, settings)
+	if o.res.Result != contract.OutcomeDone {
+		t.Fatalf("unsandboxed with settings result = %s: %+v\n%s", o.res.Result, o.res.Failed, o.stderr)
+	}
+	if got, ok := settingsArg(recordedArgs(t, rec)); !ok || got != settings {
+		t.Errorf("unsandboxed with settings: --settings = %q (%v), want %q", got, ok, settings)
+	}
+	if strings.Contains(o.stderr, claude.UnsandboxedWarning) {
+		t.Errorf("unsandboxed with settings: logged the unsandboxed warning")
 	}
 }

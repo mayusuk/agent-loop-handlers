@@ -42,7 +42,9 @@ func Sandbox(settings string, unsandboxed bool) (string, error) {
 // CheckSettings checks that the Claude Code settings file at path turns
 // the sandbox on and makes it required: a JSON object whose
 // sandbox.enabled and sandbox.failIfUnavailable are both true (work plan
-// #9 D1).
+// #9 D1), and whose sandbox.allowUnsandboxedCommands is false, so no
+// command can retry outside the sandbox. Absent counts as true, Claude
+// Code's default (work plan #35 D1).
 func CheckSettings(path string) error {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -52,6 +54,7 @@ func CheckSettings(path string) error {
 		Sandbox *struct {
 			Enabled           *bool `json:"enabled"`
 			FailIfUnavailable *bool `json:"failIfUnavailable"`
+			AllowUnsandboxed  *bool `json:"allowUnsandboxedCommands"`
 		} `json:"sandbox"`
 	}
 	data = bytes.TrimSpace(data)
@@ -66,6 +69,8 @@ func CheckSettings(path string) error {
 		return fmt.Errorf("sandbox settings %s: sandbox.enabled is not true", path)
 	case s.Sandbox.FailIfUnavailable == nil || !*s.Sandbox.FailIfUnavailable:
 		return fmt.Errorf("sandbox settings %s: sandbox.failIfUnavailable is not true", path)
+	case s.Sandbox.AllowUnsandboxed == nil || *s.Sandbox.AllowUnsandboxed:
+		return fmt.Errorf("sandbox settings %s: sandbox.allowUnsandboxedCommands is not false", path)
 	}
 	return nil
 }
