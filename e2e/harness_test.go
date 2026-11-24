@@ -99,9 +99,11 @@ Please give Sub a doc comment that says what it returns.
 
 // ghScript is the fake gh (work plan D1): it answers "gh issue view <item>"
 // and "gh pr view <change>" from files next to it, and refuses the rest.
+// It logs each call to $AGENT_LOOP_SMOKE_GH_LOG, which run sets to a path
+// the stage's sandbox lets it write (ghLog), or nowhere when it is unset.
 const ghScript = `#!/bin/sh
 dir=$(cd "$(dirname "$0")" && pwd)
-printf '%s\n' "$*" >> "$dir/calls.log"
+[ -n "$AGENT_LOOP_SMOKE_GH_LOG" ] && printf '%s\n' "$*" >> "$AGENT_LOOP_SMOKE_GH_LOG"
 case "$1 $2 $3" in
 "issue view ` + itemRef + `") cat "$dir/item.txt"; exit 0 ;;
 "pr view ` + changeRef + `") cat "$dir/change.txt"; exit 0 ;;
@@ -296,6 +298,7 @@ func (s *smoke) run(in contract.Input) stageRun {
 	}
 	env := []string{
 		"TMPDIR=" + tmp, // work plan 38 D3
+		envGhLog + "=" + ghLog(dir),
 		run.EnvInput + "=" + inPath,
 		run.EnvResult + "=" + resPath,
 		run.EnvOut + "=" + out,
@@ -546,10 +549,24 @@ func (s *smoke) flow() {
 	}
 }
 
-// ghCalls is what the agent asked the fake gh.
+// envGhLog names the file the fake gh logs its calls to.
+const envGhLog = "AGENT_LOOP_SMOKE_GH_LOG"
+
+// ghLog is the fake gh's call log for the stage whose run directory is
+// dir: in the stage's temp directory, which its sandbox lets it write
+// (TECHNICAL-SPEC §7.2, work plan 43 D1).
+func ghLog(dir string) string {
+	return filepath.Join(dir, "tmp", "gh-calls.log")
+}
+
+// ghCalls is what the agent asked the fake gh, stage by stage.
 func (s *smoke) ghCalls() string {
-	data, _ := os.ReadFile(filepath.Join(s.ghDir, "calls.log"))
-	return string(data)
+	var b strings.Builder
+	for _, st := range []contract.Stage{contract.StageImplement, contract.StageReview, contract.StageAddress} {
+		data, _ := os.ReadFile(ghLog(filepath.Join(s.root, "run-"+string(st))))
+		b.Write(data)
+	}
+	return b.String()
 }
 
 // stageSettings writes the stage's sandbox settings (liveSettings) to

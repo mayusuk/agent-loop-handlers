@@ -241,3 +241,27 @@ func TestT7_2_LiveSandboxSettings(t *testing.T) {
 		}
 	}
 }
+
+// TestT7_2_FakeGhLogIsWritable: the fake gh's call log is inside one of
+// the paths the stage's sandbox lets it write, so a sandboxed live run
+// keeps it (issue #43 R1, work plan 43 D1).
+func TestT7_2_FakeGhLogIsWritable(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	s := newSmoke(t)
+	ws := s.workspace("implement", "-b", branch, "origin/main")
+	dir := filepath.Join(s.root, "run-implement")
+	data, err := os.ReadFile(s.stageSettings(ws, dir))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got claudeSettings
+	if err := json.Unmarshal(data, &got); err != nil {
+		t.Fatal(err)
+	}
+	log := resolve(ghLog(dir))
+	if !slices.ContainsFunc(got.Sandbox.Filesystem.AllowWrite, func(w string) bool {
+		return log == w || strings.HasPrefix(log, w+string(filepath.Separator))
+	}) {
+		t.Errorf("gh log %s is outside allowWrite %q", log, got.Sandbox.Filesystem.AllowWrite)
+	}
+}
