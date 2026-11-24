@@ -14,8 +14,10 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"os"
 	"os/exec"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -155,7 +157,24 @@ func Run(ctx context.Context, opts Options) (Outcome, error) {
 	cmd.Stdout = io.MultiWriter(orDiscard(opts.Stdout), tail)
 	cmd.Stderr = orDiscard(opts.Stderr)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
-	cmd.Cancel = func() error { return signalGroup(cmd, syscall.SIGTERM) }
+	// stopped records that claude itself was still running when the
+	// context ended. Only then is the run a time limit (or the caller's
+	// cancellation): a claude that already exited, whose output is still
+	// draining, is reported by its own exit status (work plan #19 D2).
+	var stopped atomic.Bool
+	cmd.Cancel = func() error {
+		done := errors.Is(cmd.Process.Signal(syscall.Signal(0)), os.ErrProcessDone)
+		if !done {
+			stopped.Store(true)
+		}
+		if err := signalGroup(cmd, syscall.SIGTERM); err != nil {
+			return err
+		}
+		if done {
+			return os.ErrProcessDone // exec then injects no error
+		}
+		return nil
+	}
 	cmd.WaitDelay = grace
 
 	if err := cmd.Start(); err != nil {
@@ -166,7 +185,7 @@ func Run(ctx context.Context, opts Options) (Outcome, error) {
 	_ = signalGroup(cmd, syscall.SIGKILL)
 
 	out := Outcome{Usage: ParseUsage(tail.Bytes())}
-	if werr != nil && ctx.Err() != nil {
+	if stopped.Load() {
 		// Stopped by the context: by the stop time unless the caller's
 		// context ended first.
 		if perr := parent.Err(); perr != nil {
@@ -249,7 +268,12 @@ func usageFrom(data []byte) (*contract.Usage, bool) {
 		seen := false
 		for _, k := range []string{"input_tokens", "cache_creation_input_tokens", "cache_read_input_tokens"} {
 			if n, ok := integer(m[k]); ok {
-				in += n
+				// Saturate rather than wrap negative (work plan #19 D1).
+				if in > math.MaxInt64-n {
+					in = math.MaxInt64
+				} else {
+					in += n
+				}
 				seen = true
 			}
 		}

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -288,6 +289,100 @@ func TestT2_NonZeroExitIsErrorWithCode(t *testing.T) {
 	}
 }
 
+func TestD6_KilledBySignalIsErrorWithSignal(t *testing.T) {
+	_, err := Run(context.Background(), Options{
+		Bin: fakeBin, Args: Args("p", ""), Dir: t.TempDir(),
+		Env: env("FAKECLAUDE_OUTPUT_FIRST=1", "FAKECLAUDE_SLEEP=60s", "FAKECLAUDE_SHELL=kill -KILL $PPID"),
+	})
+	var ee *ExitError
+	if !errors.As(err, &ee) || ee.Code != -1 || ee.Signal != syscall.SIGKILL {
+		t.Fatalf("err = %v, want ExitError killed by SIGKILL", err)
+	}
+	if errors.Is(err, ErrTimeLimit) {
+		t.Error("a kill outside the time limit is reported as the time limit")
+	}
+	if want := "claude was killed by signal " + syscall.SIGKILL.String(); err.Error() != want {
+		t.Errorf("message %q, want %q", err, want)
+	}
+}
+
+func TestD5_UsageKeptWhenRunTimesOut(t *testing.T) {
+	out, err := Run(context.Background(), Options{
+		Bin: fakeBin, Args: Args("p", ""), Dir: t.TempDir(),
+		Env:    env("FAKECLAUDE_OUTPUT_FIRST=1", "FAKECLAUDE_SLEEP=60s"),
+		StopAt: time.Now().Add(time.Second),
+		Grace:  500 * time.Millisecond,
+	})
+	if !errors.Is(err, ErrTimeLimit) {
+		t.Fatalf("err = %v, want ErrTimeLimit", err)
+	}
+	u := out.Usage
+	if u == nil || u.Cost == nil || *u.Cost != 0.25 || *u.InputTokens != 123 || *u.OutputTokens != 40 {
+		t.Fatalf("usage = %+v, want the output's usage", u)
+	}
+}
+
+// Work plan #19 D2: claude ends on its own before the stop time, or
+// before the caller cancels its context, but a child keeps its stderr open
+// past that point and past the grace period. The run is reported by
+// claude's exit status, not as a time limit or the caller's cancellation.
+func TestFR18AC4_ExitBeforeStopTimeWhilePipesDrainIsNotTimeLimit(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		exit   string
+		code   int  // -2: no error
+		cancel bool // cancel the caller's context instead of a stop time
+	}{
+		{"stop time, exit 0", "0", -2, false},
+		{"stop time, exit 3", "3", 3, false},
+		{"caller cancels, exit 0", "0", -2, true},
+		{"caller cancels, exit 3", "3", 3, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			pidfile := filepath.Join(t.TempDir(), "child.pid")
+			ctx := context.Background()
+			opts := Options{
+				Bin: fakeBin, Args: Args("p", ""), Dir: t.TempDir(),
+				Env:    env("FAKECLAUDE_SHELL=sleep 60 >&2 & printf %s $! >"+pidfile, "FAKECLAUDE_EXIT="+tc.exit),
+				Stderr: &bytes.Buffer{},
+				Grace:  2 * time.Second,
+			}
+			if tc.cancel {
+				var cancel context.CancelFunc
+				ctx, cancel = context.WithCancel(ctx)
+				defer cancel()
+				time.AfterFunc(500*time.Millisecond, cancel)
+			} else {
+				opts.StopAt = time.Now().Add(time.Second)
+			}
+			out, err := Run(ctx, opts)
+			if tc.cancel && ctx.Err() == nil {
+				t.Fatal("the caller's context was not cancelled during the run")
+			}
+			if errors.Is(err, ErrTimeLimit) || errors.Is(err, context.Canceled) {
+				t.Fatalf("err = %v, want claude's own exit status", err)
+			}
+			if tc.code == -2 {
+				if err != nil {
+					t.Fatalf("err = %v, want none", err)
+				}
+			} else {
+				var ee *ExitError
+				if !errors.As(err, &ee) || ee.Code != tc.code {
+					t.Fatalf("err = %v, want ExitError code %d", err, tc.code)
+				}
+			}
+			if out.Usage == nil {
+				t.Error("usage lost")
+			}
+			if pid := childPid(t, pidfile); alive(pid) {
+				syscall.Kill(pid, syscall.SIGKILL)
+				t.Errorf("child %d outlived the run", pid)
+			}
+		})
+	}
+}
+
 func TestT2_MissingBinaryIsError(t *testing.T) {
 	_, err := Run(context.Background(), Options{Bin: filepath.Join(t.TempDir(), "nope"), Dir: t.TempDir()})
 	if err == nil || !strings.Contains(err.Error(), "cannot start claude") {
@@ -338,6 +433,8 @@ func TestD4_ParseUsageLenient(t *testing.T) {
 		{name: "usage not an object", in: `{"usage":[1]}`, wantNone: true},
 		{name: "last line after log lines", in: "starting\n{\"total_cost_usd\":2}\n", cost: ptr(2)},
 		{name: "huge token count", in: `{"usage":{"output_tokens":99999999999999999999}}`, wantNone: true},
+		{name: "input token sum saturates", in: `{"usage":{"input_tokens":9223372036854775807,"cache_creation_input_tokens":9223372036854775807,"cache_read_input_tokens":1}}`, inTok: i(math.MaxInt64)},
+		{name: "input token sum at the limit", in: `{"usage":{"input_tokens":9223372036854775806,"cache_read_input_tokens":1}}`, inTok: i(math.MaxInt64)},
 	} {
 		u := ParseUsage([]byte(tc.in))
 		if tc.wantNone {
