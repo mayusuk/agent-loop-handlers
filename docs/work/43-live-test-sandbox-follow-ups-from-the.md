@@ -3,7 +3,7 @@
 **Issue:** [#43](https://github.com/mayusuk/agent-loop-handlers/issues/43) (bug)
 **Branch:** `issue/43-live-test-sandbox-follow-ups-from-the`
 **Base:** `origin/main @ 8cda152` (checked before branching)
-**Status:** In progress
+**Status:** Done
 
 ## Summary
 
@@ -27,7 +27,7 @@ The live smoke test's fake `gh` now logs its calls inside each stage's allowed t
 - [x] Test that the fake gh's log is inside the stage's allowed writes (fails: it is under `<root>/gh`), then move the log.
 - [x] Assert the exact egress and permission lists.
 - [x] Test that each stage gets its own `TMPDIR`.
-- [ ] Bump agent-loop and add the drift checksum test; update the README note.
+- [x] Bump agent-loop and add the drift checksum test; update the README note.
 
 ## Acceptance criteria
 
@@ -51,4 +51,4 @@ The repository's four checks. The live test is not run (it costs money and needs
 
 ## Outcome
 
-_Filled in before shipping._
+All four findings fixed in `e2e/` and the README. R1: the fake gh logs to `AGENT_LOOP_SMOKE_GH_LOG`, which the harness sets to `run-<stage>/tmp/gh-calls.log`; `TestT7_2_FakeGhLogIsWritable` failed on the old location and passes now. R2: `TestT7_2_LiveSandboxSettings` asserts the exact `allowedDomains`, `deniedDomains` and `permissions.allow`. R3: `TestT7_2_EachStageGetsItsOwnTempDir`. R4: `TestT7_2_SandboxCopyInStep` pins the SHA-256 of agent-loop's `sandbox.go`; agent-loop is bumped to `7f40ba3` for it, and `go mod tidy` also moved `go 1.25` to `go 1.25.0` and `golang.org/x/text` to v0.33.0. The README's "empty gh-call log" warning is removed. The live test was not run. No follow-up issues.

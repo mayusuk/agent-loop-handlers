@@ -1,8 +1,11 @@
 package e2e
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -13,6 +16,8 @@ import (
 // agent-loop's internal/runners/sandbox.go writes them (issue #38). This
 // repository can't import agent-loop's internal packages, so the types and
 // the generator are a copy: keep them in step with sandbox.go.
+// TestT7_2_SandboxCopyInStep fails when the required agent-loop module's
+// sandbox.go changes: update this copy and upstreamSandboxSHA256 together.
 
 // liveEgress is §7.2's default egress allowlist without the code host's
 // hosts: the live test's remote is a local bare repository and its gh is a
@@ -273,5 +278,32 @@ func TestT7_2_FakeGhLogIsWritable(t *testing.T) {
 		return log == w || strings.HasPrefix(log, w+string(filepath.Separator))
 	}) {
 		t.Errorf("gh log %s is outside allowWrite %q", log, got.Sandbox.Filesystem.AllowWrite)
+	}
+}
+
+// upstreamSandboxSHA256 is the SHA-256 of internal/runners/sandbox.go in
+// the agent-loop module go.mod requires (agent-loop 7f40ba3), the file
+// liveSettings copies (work plan 43 D2).
+const upstreamSandboxSHA256 = "700554aa9dab32b356a91571503799c4c8fc57dc49946bc964471eb416b2b2a3"
+
+// TestT7_2_SandboxCopyInStep: the sandbox.go that liveSettings copies is
+// the one it was copied from, so bumping agent-loop can't leave the copy
+// stale unnoticed (issue #43 R4).
+func TestT7_2_SandboxCopyInStep(t *testing.T) {
+	out, err := exec.Command("go", "list", "-m", "-f", "{{.Dir}}", "github.com/mayusuk/agent-loop").Output()
+	if err != nil {
+		t.Fatalf("go list agent-loop: %v", err)
+	}
+	dir := strings.TrimSpace(string(out))
+	if dir == "" {
+		t.Fatal("go list agent-loop: no module directory (run go mod download)")
+	}
+	data, err := os.ReadFile(filepath.Join(dir, "internal", "runners", "sandbox.go"))
+	if err != nil {
+		t.Fatalf("agent-loop's sandbox.go: %v", err)
+	}
+	sum := sha256.Sum256(data)
+	if got := hex.EncodeToString(sum[:]); got != upstreamSandboxSHA256 {
+		t.Errorf("agent-loop's internal/runners/sandbox.go changed (sha256 %s, want %s): update liveSettings and its types in e2e/sandbox_test.go to match it, then upstreamSandboxSHA256", got, upstreamSandboxSHA256)
 	}
 }
