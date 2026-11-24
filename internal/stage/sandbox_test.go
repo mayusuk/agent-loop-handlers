@@ -139,7 +139,9 @@ func TestPlanT8_SettingsWithoutSandboxAreFailed(t *testing.T) {
 			f := newFixture(t, false)
 			f.flags = prompt.Flags{Unsandboxed: unsandboxed}
 			p := filepath.Join(t.TempDir(), "settings.json")
-			os.WriteFile(p, []byte(data), 0o644)
+			if err := os.WriteFile(p, []byte(data), 0o644); err != nil {
+				t.Fatal(err)
+			}
 			rec := filepath.Join(t.TempDir(), "rec.json")
 			o := f.implement(commitAndDraft, doneDraft, "FAKECLAUDE_RECORD", rec, claude.EnvSettings, p)
 			if r := failedReason(t, o); !strings.HasPrefix(r, "sandbox settings "+p+": ") {
@@ -186,7 +188,9 @@ func TestPlanT8_AddressStageIsSandboxed(t *testing.T) {
 		f = newFixture(t, true)
 		f.flags = prompt.Flags{Unsandboxed: unsandboxed}
 		p := filepath.Join(t.TempDir(), "settings.json")
-		os.WriteFile(p, []byte(`{"sandbox":{"enabled":true,"failIfUnavailable":true,"allowUnsandboxedCommands":true}}`), 0o644)
+		if err := os.WriteFile(p, []byte(`{"sandbox":{"enabled":true,"failIfUnavailable":true,"allowUnsandboxedCommands":true}}`), 0o644); err != nil {
+			t.Fatal(err)
+		}
 		rec = filepath.Join(t.TempDir(), "rec.json")
 		o = f.address(f.addressInput(contract.ModeFindings), commitAndDraft, repliesAll, "FAKECLAUDE_RECORD", rec, claude.EnvSettings, p)
 		if r := failedReason(t, o); r != "sandbox settings "+p+": sandbox.allowUnsandboxedCommands is not false" {
