@@ -210,7 +210,7 @@ func (f *fixture) runStage(in contract.Input, body stageFunc, shell, draft strin
 func sandboxSettings(t *testing.T) string {
 	t.Helper()
 	p := filepath.Join(t.TempDir(), "claude-settings.json")
-	if err := os.WriteFile(p, []byte(`{"sandbox":{"enabled":true,"failIfUnavailable":true}}`), 0o644); err != nil {
+	if err := os.WriteFile(p, []byte(`{"sandbox":{"enabled":true,"failIfUnavailable":true,"allowUnsandboxedCommands":false}}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	return p

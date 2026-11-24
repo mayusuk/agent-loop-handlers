@@ -3,6 +3,13 @@
 All notable changes to `agent-loop-claude`. Versions follow semantic versioning; each release's
 git tag is the version with a leading `v`.
 
+## Unreleased
+
+### Changed
+
+- The sandbox settings check also requires `sandbox.allowUnsandboxedCommands` to be `false`; a
+  file that sets it `true` or leaves it out gives `failed` before `claude` starts.
+
 ## 0.1.0
 
 The first release, for agent-loop v0.1 (INTEGRATION-SPEC §12.4, PRODUCT-SPEC D38).

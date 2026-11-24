@@ -3,7 +3,7 @@
 **Issue:** [#35](https://github.com/mayusuk/agent-loop-handlers/issues/35) (bug)
 **Branch:** `issue/35-sandbox-check-gaps-from-the-review-of-34`
 **Base:** `origin/main @ 4e5abf3` (checked before branching)
-**Status:** Draft
+**Status:** Done
 
 ## Summary
 
@@ -24,8 +24,8 @@ The sandbox settings check now refuses a file that lets commands run outside the
 
 ## Steps
 
-- [ ] _Each step small enough to commit on its own._
-- [ ] _For a bug, the first step is a test that fails because of it._
+- [x] _Each step small enough to commit on its own._
+- [x] _For a bug, the first step is a test that fails because of it._
 
 ## Acceptance criteria
 
@@ -46,4 +46,4 @@ A runner other than agent-loop's that writes minimal settings without the field 
 
 ## Outcome
 
-_Filled in before shipping: what was done, deviations from this work plan's approach and why, follow-up issues filed. Details the specs should record go in Decisions, not here._
+Done as planned. `CheckSettings` now refuses settings whose `sandbox.allowUnsandboxedCommands` is `true` or absent (D1); the minimal settings fixtures write it as `false`; README and CHANGELOG say so. The address stage has a sandbox test: `--settings` passed, no settings or bad settings fail before claude starts and nothing is pushed, `--unsandboxed` runs without `--settings` and warns. The test steps and the fix went in one commit, since the fixture change would otherwise have been a no-op. No follow-up issues.
