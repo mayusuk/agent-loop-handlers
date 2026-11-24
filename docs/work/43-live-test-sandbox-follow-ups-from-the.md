@@ -52,3 +52,5 @@ The repository's four checks. The live test is not run (it costs money and needs
 ## Outcome
 
 All four findings fixed in `e2e/` and the README. R1: the fake gh logs to `AGENT_LOOP_SMOKE_GH_LOG`, which the harness sets to `run-<stage>/tmp/gh-calls.log`; `TestT7_2_FakeGhLogIsWritable` failed on the old location and passes now. R2: `TestT7_2_LiveSandboxSettings` asserts the exact `allowedDomains`, `deniedDomains` and `permissions.allow`. R3: `TestT7_2_EachStageGetsItsOwnTempDir`. R4: `TestT7_2_SandboxCopyInStep` pins the SHA-256 of agent-loop's `sandbox.go`; agent-loop is bumped to `7f40ba3` for it, and `go mod tidy` also moved `go 1.25` to `go 1.25.0` and `golang.org/x/text` to v0.33.0. The README's "empty gh-call log" warning is removed. The live test was not run. No follow-up issues.
+
+Review round 1 (PR #45): R1 (tests) led to `TestT7_2_FakeGhLogsToStageTmp`, which runs the fake gh itself and asserts the call lands in `run-<stage>/tmp/gh-calls.log`, nothing is written next to the script, nothing is logged with the variable unset, and `ghCalls` reads the stages in order. A mutation (script logging to `$dir/calls.log`) makes it fail. No pushbacks.
