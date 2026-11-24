@@ -9,6 +9,7 @@
 //	FAKECLAUDE_SHELL          run this with "sh -c" in the working directory
 //	FAKECLAUDE_DRAFT          write FAKECLAUDE_DRAFT_CONTENT to this path
 //	FAKECLAUDE_STDERR         print this to stderr
+//	FAKECLAUDE_OUTPUT_FIRST   "1": print the output before sleeping, not after
 //	FAKECLAUDE_SLEEP          sleep for this Go duration
 //	FAKECLAUDE_OUTPUT         print this to stdout instead of DefaultOutput
 //	FAKECLAUDE_EXIT           exit with this code (default 0)
@@ -74,16 +75,22 @@ func main() {
 	if s := os.Getenv("FAKECLAUDE_STDERR"); s != "" {
 		fmt.Fprintln(os.Stderr, s)
 	}
+	out, ok := os.LookupEnv("FAKECLAUDE_OUTPUT")
+	if !ok {
+		out = DefaultOutput
+	}
+	first := os.Getenv("FAKECLAUDE_OUTPUT_FIRST") == "1"
+	if first {
+		fmt.Fprint(os.Stdout, out)
+	}
 	if s := os.Getenv("FAKECLAUDE_SLEEP"); s != "" {
 		d, err := time.ParseDuration(s)
 		check(err)
 		time.Sleep(d)
 	}
-	out, ok := os.LookupEnv("FAKECLAUDE_OUTPUT")
-	if !ok {
-		out = DefaultOutput
+	if !first {
+		fmt.Fprint(os.Stdout, out)
 	}
-	fmt.Fprint(os.Stdout, out)
 	if s := os.Getenv("FAKECLAUDE_EXIT"); s != "" {
 		code, err := strconv.Atoi(s)
 		check(err)

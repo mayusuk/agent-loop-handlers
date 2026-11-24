@@ -24,7 +24,7 @@ Closes four edge cases in `internal/claude.Run` and `ParseUsage` found in the re
 
 ## Steps
 
-- [ ] Failing tests: R4 (exit 0 / exit 3 with a child holding stderr past the stop time), R3 (overflowing input tokens), plus R1 (killed by signal) and R2 (usage kept on timeout, with `FAKECLAUDE_OUTPUT_FIRST`).
+- [x] Failing tests: R4 (exit 0 / exit 3 with a child holding stderr past the stop time), R3 (overflowing input tokens), plus R1 (killed by signal) and R2 (usage kept on timeout, with `FAKECLAUDE_OUTPUT_FIRST`).
 - [ ] Fix `Run` and `usageFrom`.
 
 ## Acceptance criteria
