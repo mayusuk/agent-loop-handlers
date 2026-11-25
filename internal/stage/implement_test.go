@@ -436,7 +436,11 @@ func TestD3_UncommittedChangesAreNotPushed(t *testing.T) {
 // draft (FR-18 AC4, plan D3, work plan D5).
 func TestFR18AC4_TimeLimitIsFailed(t *testing.T) {
 	f := newFixture(t, false)
-	f.deadline = time.Now().Add(4 * time.Second)
+	// The deadline is written in whole seconds, so up to 1s is lost; 8s
+	// leaves the fake about 5s to commit before the stop at deadline-2s,
+	// and is still well inside the 2m default margin, so claude running at
+	// all shows the 2s margin was used.
+	f.deadline = time.Now().Add(8 * time.Second)
 	f.flags = prompt.Flags{DeadlineMargin: 2 * time.Second, MarginSet: true}
 	start := time.Now()
 	// The fake commits and writes a done draft, then hangs past the stop
