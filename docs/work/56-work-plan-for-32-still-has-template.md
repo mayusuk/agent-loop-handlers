@@ -3,7 +3,7 @@
 **Issue:** [#56](https://github.com/mayusuk/agent-loop-handlers/issues/56) (bug)
 **Branch:** `issue/56-work-plan-for-32-still-has-template`
 **Base:** `origin/main @ dc4c4b9` (checked before branching)
-**Status:** Draft
+**Status:** Done
 
 ## Summary
 
@@ -39,4 +39,4 @@ None.
 
 ## Outcome
 
-_Filled in before shipping: what was done, deviations from this work plan's approach and why, follow-up issues filed. Details the specs should record go in Decisions, not here._
+Replaced the placeholder Steps in the #32 work plan with the four steps PR #54 took, as planned. No follow-up issues.
