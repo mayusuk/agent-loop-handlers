@@ -19,8 +19,10 @@ Only `internal/stage/address_test.go`: add two cases to `TestFR5AC6_WrongShapeIs
 
 ## Steps
 
-- [ ] _Each step small enough to commit on its own._
-- [ ] _For a bug, the first step is a test that fails because of it._
+- [x] Add a `base_update` merge with its parents reversed (base, input head) and a merge of three parents, both built with `git commit-tree`, to `TestFR5AC6_WrongShapeIsFailedAndNotPushed`: each is failed and not pushed.
+- [x] Add `TestD3_BaseUpdateBlockedAndNeedsOwnerPushNothing`: `blocked` and `needs_owner` in `base_update` mode push nothing.
+- [x] Turn `TestD2_BaseUpdateWithoutBaseTipIsFailed` into a table of no `change` and an empty `change.base_tip`: each is failed before claude runs.
+- [x] Rename `TestD2_AddressWithoutAddressObjectIsFailed` to `TestI5_2_AddressWithoutAddressObjectIsFailed`.
 
 ## Acceptance criteria
 
