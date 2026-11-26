@@ -108,6 +108,64 @@ func TestI12_4_ReleaseNotesKeepHeadingsInCodeFences(t *testing.T) {
 	}
 }
 
+// TestI12_4_ReleaseNotesFencesCloseOnlyOnAMatchingFence: as in CommonMark, a
+// fence closes only on a line of the same character, at least as long as the
+// opener, with nothing after it but spaces; any other fence-like line inside
+// it is content. Openers and closers may be indented up to three spaces
+// (#61, work plan #61 D1, D2).
+func TestI12_4_ReleaseNotesFencesCloseOnlyOnAMatchingFence(t *testing.T) {
+	for name, body := range map[string]string{
+		"tilde inside backticks":           "```\n~~~\n## comment\n~~~\n```\n- after\n",
+		"backticks inside tildes":          "~~~\n```\n## comment\n```\n~~~\n- after\n",
+		"shorter inside longer":            "````md\n```sh\n## comment\n```\n````\n- after\n",
+		"shorter tildes inside longer":     "~~~~\n~~~\n## comment\n~~~\n~~~~\n- after\n",
+		"longer closer closes":             "```\n## comment\n`````\n- after\n",
+		"closer with info string is text":  "```\n```sh\n## comment\n```\n- after\n",
+		"closer indented three spaces":     "```\n## comment\n   ```\n- after\n",
+		"opener indented three spaces":     "   ~~~\n## comment\n~~~\n- after\n",
+		"closer with trailing spaces":      "```\n## comment\n```  \n- after\n",
+		"mismatched pair then real fence":  "```\n~~~\n```\n~~~\n## comment\n~~~\n- after\n",
+		"unclosed inner fence is content":  "````\n```\n## comment\n````\n- after\n",
+		"backtick fence after tilde fence": "~~~\n## a\n~~~\n```\n## b\n```\n- after\n",
+	} {
+		t.Run(name, func(t *testing.T) {
+			changelog := "## 0.2.0\n\n" + body + "\n## 0.1.0\n\n- old\n"
+			out, stderr, err := releaseNotes(t, fakeRepo(t, "0.2.0", changelog), "0.2.0")
+			if err != nil {
+				t.Fatalf("release-notes.sh: %v: %s", err, stderr)
+			}
+			if out != body {
+				t.Errorf("release notes = %q, want %q", out, body)
+			}
+		})
+	}
+}
+
+// TestI12_4_ReleaseNotesIgnoreLinesThatAreNotFences: lines that CommonMark
+// does not read as a fence don't hide the next heading, so the section still
+// ends there and does not run into the previous version (work plan #61 D1,
+// D2).
+func TestI12_4_ReleaseNotesIgnoreLinesThatAreNotFences(t *testing.T) {
+	for name, body := range map[string]string{
+		"indented four spaces": "- new\n\n    ```\n",
+		"indented by a tab":    "- new\n\n\t~~~\n",
+		"two backticks":        "- new\n\n``\n",
+		"backtick in info":     "- new\n\n``` a`b\n",
+		"mixed characters":     "- new\n\n``~\n",
+	} {
+		t.Run(name, func(t *testing.T) {
+			changelog := "## 0.2.0\n\n" + body + "\n## 0.1.0\n\n- old\n"
+			out, stderr, err := releaseNotes(t, fakeRepo(t, "0.2.0", changelog), "0.2.0")
+			if err != nil {
+				t.Fatalf("release-notes.sh: %v: %s", err, stderr)
+			}
+			if out != body {
+				t.Errorf("release notes = %q, want %q", out, body)
+			}
+		})
+	}
+}
+
 // TestI12_4_ReleaseNotesRefuseABadRelease: the script fails, so nothing is
 // published, when the tag's version is not Release, the section is missing
 // or empty, or no version is given (work plan #58 D2).
