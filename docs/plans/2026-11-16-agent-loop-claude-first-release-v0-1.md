@@ -48,7 +48,7 @@ Sources read (agent-loop specs win; vendored in `docs/specs/agent-loop-excerpts.
 - **D13** [gap] TECHNICAL-SPEC T7: `claude` is found through `--claude <path>`, then `AGENT_LOOP_CLAUDE_BIN`, then `PATH`. Tests always use the fake binary through the environment variable.
 - **D14** [gap] INTEGRATION-SPEC §2: the `contract` dependency is pinned to a pseudo-version of agent-loop `main` until agent-loop tags a release; it is bumped in a PR when the contract changes. Why: agent-loop has no tags yet.
 - **D15** [gap] TECHNICAL-SPEC §14 style: a live smoke test with the real `claude` runs only when `AGENT_LOOP_LIVE=1`, against a local bare repository (no GitHub). Why: CI has no API key.
-- **D16** [open] INTEGRATION-SPEC §12.4: for v0.1 the repository stays private and the owner builds the handler locally (`go install ./cmd/agent-loop-claude` from the clone). Coordinator ruling 2026-11-16 (Q3 option b). Making it public is the owner's call at release.
+- **D16** [resolved] INTEGRATION-SPEC §12.4: for v0.1 the repository stays private and the owner builds the handler locally (`go install ./cmd/agent-loop-claude` from the clone). Coordinator ruling 2026-11-16 (Q3 option b). Making it public is the owner's call at release. **Resolved 2026-11-25 (#58, work plan #58 D7):** the owner made the repository public; `agent-loop-claude` is released by GoReleaser on a `v*` tag and installed with `brew install mayusuk/tap/agent-loop-claude`. Building from the clone stays the alternative.
 
 ## Out of scope
 
@@ -56,7 +56,7 @@ Sources read (agent-loop specs win; vendored in `docs/specs/agent-loop-excerpts.
 - Changing the owner's skills (`work-issue`, `review-pr`, `address-pr`) to add their result-only mode (D1).
 - Generating the sandbox settings: TECHNICAL-SPEC §7.2 gives that to agent-loop's `local` runner.
 - Reading tracker text: the agent reads the item and change itself with `gh` and `GH_TOKEN`, as data (§4.1).
-- Packaging beyond a local `go install` from the clone (D16).
+- Packaging beyond a local `go install` from the clone (D16) was out of scope for v0.1; Homebrew packaging followed in #58 (D16, resolved).
 
 ## Risks and open questions
 
@@ -161,7 +161,7 @@ Add `e2e/live_test.go`, skipped unless `AGENT_LOOP_LIVE=1` (D15). It creates a s
 - With it, the three stages each write a valid result, and the implement head is on the bare remote.
 
 ### T10: Document usage and cut the first release (#11)
-Update the README: install, profile snippets for each stage, prompt overrides and `--skill`, the draft format link, the environment variables (`AGENT_LOOP_CLAUDE_BIN`, `AGENT_LOOP_CLAUDE_SETTINGS`), and the supported contract versions. Add `CHANGELOG.md` with `v0.1.0`, set the release version reported by `version`, and describe the tagging step (the tag itself is pushed by the owner). Install instructions follow D16 (local `go install` from the clone).
+Update the README: install, profile snippets for each stage, prompt overrides and `--skill`, the draft format link, the environment variables (`AGENT_LOOP_CLAUDE_BIN`, `AGENT_LOOP_CLAUDE_SETTINGS`), and the supported contract versions. Add `CHANGELOG.md` with `v0.1.0`, set the release version reported by `version`, and describe the tagging step (the tag itself is pushed by the owner). Install instructions follow D16 (local `go install` from the clone; superseded by Homebrew in #58, D16 resolved).
 
 **Depends on:** T9
 
