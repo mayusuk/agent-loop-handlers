@@ -23,11 +23,34 @@ if [ "$release" != "$version" ]; then
 fi
 
 # A "## " line inside a ``` or ~~~ code fence is section text, not the next
-# heading (work plan #58 D8).
+# heading (work plan #58 D8). Fences follow CommonMark (work plan #61 D1, D2):
+# a run of three or more backticks or tildes, indented up to three spaces,
+# opens one (a backtick opener's info string has no backtick), and only a run
+# of the same character, at least as long, with nothing after it but spaces
+# or tabs, closes it. POSIX awk only, so it runs with BSD awk and mawk.
 notes=$(awk -v want="## $version" '
-	/^[ \t]*(```|~~~)/ { fence = !fence; if (found) print; next }
-	!fence && $0 == want { found = 1; next }
-	!fence && found && /^## / { exit }
+	{
+		# The fence run on this line: its character c and length n.
+		i = 1
+		while (i <= 3 && substr($0, i, 1) == " ") i++
+		c = substr($0, i, 1)
+		n = 0
+		if (c == "`" || c == "~")
+			while (substr($0, i + n, 1) == c) n++
+		rest = substr($0, i + n)
+	}
+	fch != "" {
+		if (c == fch && n >= flen && rest ~ /^[ \t]*$/) fch = ""
+		if (found) print
+		next
+	}
+	n >= 3 && !(c == "`" && index(rest, "`")) {
+		fch = c; flen = n
+		if (found) print
+		next
+	}
+	$0 == want { found = 1; next }
+	found && /^## / { exit }
 	found { print }
 ' CHANGELOG.md)
 

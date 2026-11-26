@@ -3,7 +3,7 @@
 **Issue:** [#61](https://github.com/mayusuk/agent-loop-handlers/issues/61) (bug)
 **Branch:** `issue/61-release-notes-sh-mismatched-or-nested`
 **Base:** `origin/main @ 6eb8cb9` (checked before branching)
-**Status:** In progress
+**Status:** Done
 
 ## Summary
 
@@ -23,7 +23,7 @@ Replace the flip with a small fence scanner in the awk program: count up to thre
 ## Steps
 
 - [x] Tests for nested and mismatched fences (fail on the current script), plus lines that are not fences under CommonMark.
-- [ ] Fence tracking by character and length in `scripts/release-notes.sh`.
+- [x] Fence tracking by character and length in `scripts/release-notes.sh`.
 
 ## Acceptance criteria
 
@@ -38,7 +38,7 @@ Replace the flip with a small fence scanner in the awk program: count up to thre
 
 ## Verification
 
-Tests run with macOS `/usr/bin/awk` (BSD awk) locally; CI's Ubuntu runner uses mawk.
+The `TestI12_4_ReleaseNotes*` tests pass locally with macOS `/usr/bin/awk` (BSD awk) and with mawk 1.3.4 put first on `PATH` as `awk`; CI's Ubuntu runner uses mawk.
 
 ## Risks and open questions
 
@@ -46,4 +46,4 @@ None.
 
 ## Outcome
 
-_Filled in before shipping._
+`scripts/release-notes.sh` tracks the opening fence's character and length and closes it only on a matching CommonMark closing fence; lines that are not fences under CommonMark (indented four spaces or by a tab, fewer than three characters, a backtick in a backtick info string) no longer open one. New tests: `TestI12_4_ReleaseNotesFencesCloseOnlyOnAMatchingFence` (nested and mismatched fences) and `TestI12_4_ReleaseNotesIgnoreLinesThatAreNotFences`. No deviation from the approach. mayusuk/agent-loop#150 has no PR yet; its fix should use the same rule (D1, D2).
