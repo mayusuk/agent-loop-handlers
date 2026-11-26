@@ -48,6 +48,7 @@ Adds a GoReleaser config and a tag-triggered release workflow, mirroring mayusuk
 - **D4** [gap] plan D2 (#11): the release is cut by pushing the `vX.Y.Z` tag; the workflow publishes the GitHub release, so the README's manual `gh release create` step is removed. Building from source stays documented as the alternative to Homebrew.
 - **D5** [gap] issue #58: GoReleaser's `brews` (formula) section is used although GoReleaser v2.10+ marks it deprecated in favour of `homebrew_casks`, so `goreleaser check` exits non-zero with "configuration is valid, but uses deprecated properties", as in agent-loop (#124 D7). Why: the issue names a formula, a formula covers Linux, and the pinned GoReleaser version keeps it working.
 - **D6** [gap] issue #58: the GitHub release is titled `agent-loop-claude vX.Y.Z`, as the README's earlier manual `gh release create` step named it. Why: GoReleaser's default title is the bare tag.
+- **D8** [gap] D2, review R3: a `## ` line inside a ``` or ~~~ code fence (indented or not) is section text, not the next version's heading, so `scripts/release-notes.sh` tracks fences and prints the whole section. An unclosed fence runs to the end of the file, as Markdown renders it. Why: notes must never be silently cut short.
 
 ## Verification
 

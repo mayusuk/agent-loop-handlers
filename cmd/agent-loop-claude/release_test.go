@@ -77,6 +77,36 @@ func TestI12_4_ReleaseNotesStopAtTheNextSection(t *testing.T) {
 	}
 }
 
+// TestI12_4_ReleaseNotesKeepHeadingsInCodeFences: a "## " line inside a
+// fenced code block is part of the section, not the start of the next one,
+// so the notes are not silently cut short (work plan #58 D2, D8).
+func TestI12_4_ReleaseNotesKeepHeadingsInCodeFences(t *testing.T) {
+	for name, tc := range map[string]struct{ changelog, want string }{
+		"backtick fence": {
+			"## 0.2.0\n\n```sh\n## comment\n```\n- after\n\n## 0.1.0\n\n- old\n",
+			"```sh\n## comment\n```\n- after\n",
+		},
+		"tilde fence": {
+			"## 0.2.0\n\n~~~\n## comment\n~~~\n- after\n\n## 0.1.0\n\n- old\n",
+			"~~~\n## comment\n~~~\n- after\n",
+		},
+		"indented fence": {
+			"## 0.2.0\n\n- item:\n\n  ```sh\n## comment\n  ```\n- after\n\n## 0.1.0\n\n- old\n",
+			"- item:\n\n  ```sh\n## comment\n  ```\n- after\n",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			out, stderr, err := releaseNotes(t, fakeRepo(t, "0.2.0", tc.changelog), "0.2.0")
+			if err != nil {
+				t.Fatalf("release-notes.sh: %v: %s", err, stderr)
+			}
+			if out != tc.want {
+				t.Errorf("release notes = %q, want %q", out, tc.want)
+			}
+		})
+	}
+}
+
 // TestI12_4_ReleaseNotesRefuseABadRelease: the script fails, so nothing is
 // published, when the tag's version is not Release, the section is missing
 // or empty, or no version is given (work plan #58 D2).

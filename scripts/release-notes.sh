@@ -5,6 +5,7 @@
 #
 # Fails, so nothing is published, when <version> is not Release in
 # cmd/agent-loop-claude/main.go, or the section is missing or empty.
+# Headings inside code fences don't end the section.
 #
 # Usage: scripts/release-notes.sh <version>   (run from the repository root)
 set -eu
@@ -21,9 +22,12 @@ if [ "$release" != "$version" ]; then
 	exit 1
 fi
 
+# A "## " line inside a ``` or ~~~ code fence is section text, not the next
+# heading (work plan #58 D8).
 notes=$(awk -v want="## $version" '
-	$0 == want { found = 1; next }
-	found && /^## / { exit }
+	/^[ \t]*(```|~~~)/ { fence = !fence; if (found) print; next }
+	!fence && $0 == want { found = 1; next }
+	!fence && found && /^## / { exit }
 	found { print }
 ' CHANGELOG.md)
 
