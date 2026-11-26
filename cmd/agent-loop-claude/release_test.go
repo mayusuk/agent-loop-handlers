@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -158,6 +159,87 @@ func TestI12_4_ReadmeInstallsWithHomebrew(t *testing.T) {
 	} {
 		if !strings.Contains(cfg, want) {
 			t.Errorf(".goreleaser.yaml lacks %q", want)
+		}
+	}
+}
+
+// TestI12_4_ReleaseWorkflowChecksNotesBeforePublishing: release.yml runs only
+// on a v* tag push, runs the tests and scripts/release-notes.sh before
+// GoReleaser, passes the notes file with --release-notes, and pins every
+// action to a full commit SHA (issue #58, work plan #58 D2).
+func TestI12_4_ReleaseWorkflowChecksNotesBeforePublishing(t *testing.T) {
+	checkReleaseWorkflow(t, readRepoFile(t, ".github/workflows/release.yml"))
+}
+
+// TestI12_4_ReleaseWorkflowCheckCatchesBrokenWorkflows: the check above fails
+// when the notes step is dropped or moved after GoReleaser, the notes are not
+// passed, another trigger is added, or an action is pinned to a tag.
+func TestI12_4_ReleaseWorkflowCheckCatchesBrokenWorkflows(t *testing.T) {
+	good := readRepoFile(t, ".github/workflows/release.yml")
+	notes := "      - name: release notes\n        run: scripts/release-notes.sh \"${GITHUB_REF_NAME#v}\" > \"$RUNNER_TEMP/release-notes.md\"\n"
+	if !strings.Contains(good, notes) {
+		t.Fatalf("release.yml lacks the notes step %q", notes)
+	}
+	goreleaser := "      - uses: goreleaser/goreleaser-action@"
+	for name, broken := range map[string]string{
+		"no notes step":        strings.Replace(good, notes, "", 1),
+		"notes after release":  strings.Replace(strings.Replace(good, notes, "", 1), "        env:\n", "        env:\n          X: y\n"+notes, 1),
+		"no --release-notes":   strings.Replace(good, " --release-notes ${{ runner.temp }}/release-notes.md", "", 1),
+		"no tests":             strings.Replace(good, "        run: go test -race -count=1 ./...\n", "        run: true\n", 1),
+		"branch trigger":       strings.Replace(good, "on:\n  push:\n", "on:\n  push:\n    branches: [main]\n", 1),
+		"another trigger":      strings.Replace(good, "on:\n", "on:\n  workflow_dispatch:\n", 1),
+		"action pinned to tag": strings.Replace(good, goreleaser+"e435ccd777264be153ace6237001ef4d979d3a7a", goreleaser+"v6", 1),
+	} {
+		t.Run(name, func(t *testing.T) {
+			if broken == good {
+				t.Fatal("mutation did not change release.yml")
+			}
+			ft := &fakeT{}
+			checkReleaseWorkflow(ft, broken)
+			if !ft.failed {
+				t.Error("check passed a broken release.yml")
+			}
+		})
+	}
+}
+
+// checker is the part of testing.T that checkReleaseWorkflow uses, so the
+// mutation test can see whether it fails.
+type checker interface {
+	Helper()
+	Errorf(format string, args ...any)
+}
+
+type fakeT struct{ failed bool }
+
+func (*fakeT) Helper()                 {}
+func (f *fakeT) Errorf(string, ...any) { f.failed = true }
+
+func checkReleaseWorkflow(t checker, wf string) {
+	t.Helper()
+	if want := "on:\n  push:\n    tags: [\"v*\"]\npermissions:"; !strings.Contains(wf, want) {
+		t.Errorf("release.yml trigger is not only a v* tag push: lacks %q", want)
+	}
+	tests := strings.Index(wf, "run: go test -race -count=1 ./...\n")
+	notes := strings.Index(wf, "run: scripts/release-notes.sh \"${GITHUB_REF_NAME#v}\" > \"$RUNNER_TEMP/release-notes.md\"\n")
+	release := strings.Index(wf, "uses: goreleaser/goreleaser-action@")
+	switch {
+	case tests < 0 || notes < 0 || release < 0:
+		t.Errorf("release.yml lacks a step: tests at %d, notes at %d, goreleaser at %d", tests, notes, release)
+	case !(tests < notes && notes < release):
+		t.Errorf("release.yml steps out of order: tests at %d, notes at %d, goreleaser at %d", tests, notes, release)
+	}
+	if want := "args: release --clean --release-notes ${{ runner.temp }}/release-notes.md\n"; !strings.Contains(wf, want) {
+		t.Errorf("release.yml does not pass the notes to GoReleaser: lacks %q", want)
+	}
+	uses := regexp.MustCompile(`(?m)^\s*- uses: (\S+)`).FindAllStringSubmatch(wf, -1)
+	if len(uses) == 0 {
+		t.Errorf("release.yml has no actions")
+	}
+	pinned := regexp.MustCompile(`^[\w.-]+/[\w.-]+@[0-9a-f]{40}$`)
+	for _, u := range uses {
+		if !pinned.MatchString(u[1]) {
+			t.Errorf("release.yml action %s is not pinned to a full commit SHA", u[1])
 		}
 	}
 }
