@@ -22,7 +22,7 @@ Replace the flip with a small fence scanner in the awk program: count up to thre
 
 ## Steps
 
-- [ ] Tests for nested and mismatched fences (fail on the current script), plus lines that are not fences under CommonMark.
+- [x] Tests for nested and mismatched fences (fail on the current script), plus lines that are not fences under CommonMark.
 - [ ] Fence tracking by character and length in `scripts/release-notes.sh`.
 
 ## Acceptance criteria
