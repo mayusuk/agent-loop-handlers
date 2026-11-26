@@ -25,20 +25,17 @@ v0.2.
 
 ## Install
 
-For v0.1 the repository is private, and you build the handler from a clone (plan D16). You need
-Go 1.25 and Claude Code (`claude`) installed and logged in.
+You need Claude Code (`claude`) installed and logged in. Install `agent-loop-claude` with Homebrew,
+on macOS or Linux:
 
 ```sh
-git clone git@github.com:mayusuk/agent-loop-handlers.git
-cd agent-loop-handlers
-git checkout v0.1.0      # once the owner has pushed the tag; until then, main
-go install ./cmd/agent-loop-claude
+brew install mayusuk/tap/agent-loop-claude
 agent-loop-claude version
 ```
 
-`go install` puts the binary in `$(go env GOPATH)/bin`, usually `~/go/bin`. That directory must be
-on the `PATH` of the agent-loop worker, since `agent-loop project validate` and the runner look the
-command up there. `version` prints:
+Homebrew puts it on your `PATH`. It must be on the `PATH` of the agent-loop worker, since
+`agent-loop project validate` and the runner look the command up there. `brew upgrade
+agent-loop-claude` installs a newer release. `version` prints:
 
 ```text
 agent-loop-claude 0.1.0
@@ -46,6 +43,18 @@ contract versions: 1.0
 ```
 
 `agent-loop-claude version --json` prints `{"version":"0.1.0","contracts":["1.0"]}`.
+
+To build from source instead, with Go 1.25:
+
+```sh
+git clone https://github.com/mayusuk/agent-loop-handlers.git
+cd agent-loop-handlers
+git checkout v0.1.0
+go install ./cmd/agent-loop-claude
+```
+
+`go install` puts the binary in `$(go env GOPATH)/bin`, usually `~/go/bin`, which must then be on
+the worker's `PATH`. A build from a commit between releases reports the last release.
 
 ## Profile
 
@@ -153,7 +162,7 @@ major version: a contract 2.x needs a new major release of `agent-loop-claude`.
 
 The owner cuts a release; nothing here pushes tags. For a release `X.Y.Z`:
 
-1. Set `Release` in `cmd/agent-loop-claude/main.go` to `X.Y.Z`, and add its section to
+1. Set `Release` in `cmd/agent-loop-claude/main.go` to `X.Y.Z`, and add its `## X.Y.Z` section to
    `CHANGELOG.md`, in a PR. `TestI12_4_` tests check that the CHANGELOG and this README name the
    same release and contract versions.
 2. After the PR merges, tag the merge commit and push the tag:
@@ -164,13 +173,28 @@ The owner cuts a release; nothing here pushes tags. For a release `X.Y.Z`:
    git push origin vX.Y.Z
    ```
 
-3. Optionally, publish a GitHub release with the CHANGELOG section as its notes:
-
-   ```sh
-   gh release create vX.Y.Z --repo mayusuk/agent-loop-handlers --title "agent-loop-claude vX.Y.Z" --notes-file <file with the section>
-   ```
+Pushing the tag runs `.github/workflows/release.yml`. It runs the tests, then
+`scripts/release-notes.sh X.Y.Z`, which prints the CHANGELOG section and fails if `Release` isn't
+`X.Y.Z` or the section is missing or empty, so a mismatched tag publishes nothing. Then GoReleaser
+(`.goreleaser.yaml`, v2.20.3) builds macOS and Linux binaries (arm64 and amd64) with
+`main.version` set to `X.Y.Z`, publishes the GitHub release "agent-loop-claude vX.Y.Z" with the
+archives, `checksums.txt` and the CHANGELOG section as its notes, and commits
+`Formula/agent-loop-claude.rb` to [mayusuk/homebrew-tap](https://github.com/mayusuk/homebrew-tap).
+The workflow needs the repository secret `HOMEBREW_TAP_GITHUB_TOKEN`: a fine-grained token with
+Contents read and write on mayusuk/homebrew-tap only.
 
 Tags carry a leading `v` (`v0.1.0`), as Go modules need. `version` prints the release without it.
+
+Check the release config locally, without publishing:
+
+```sh
+go run github.com/goreleaser/goreleaser/v2@v2.20.3 check   # reports the deprecated brews section
+go run github.com/goreleaser/goreleaser/v2@v2.20.3 release --snapshot --clean
+./dist/agent-loop-claude_darwin_arm64_v8.0/agent-loop-claude version
+```
+
+`check` exits non-zero only because GoReleaser marks the `brews` (formula) section deprecated, as
+in agent-loop (work plan #58 D5).
 
 ## Specs
 
