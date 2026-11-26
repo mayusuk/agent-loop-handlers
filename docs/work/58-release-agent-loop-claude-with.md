@@ -3,7 +3,7 @@
 **Issue:** [#58](https://github.com/mayusuk/agent-loop-handlers/issues/58) (feature)
 **Branch:** `issue/58-release-agent-loop-claude-with`
 **Base:** `origin/main @ 0959001` (checked before branching)
-**Status:** In progress
+**Status:** Done
 
 ## Summary
 
@@ -30,7 +30,7 @@ Adds a GoReleaser config and a tag-triggered release workflow, mirroring mayusuk
 
 - [x] Release notes script and its tests.
 - [x] `.goreleaser.yaml`, `release.yml`, `.gitignore`; check with `goreleaser check` and `release --snapshot --clean`.
-- [ ] README install and releasing sections.
+- [x] README install and releasing sections.
 
 ## Acceptance criteria
 
@@ -46,6 +46,8 @@ Adds a GoReleaser config and a tag-triggered release workflow, mirroring mayusuk
 - **D2** [gap] issue #58 "Release notes from CHANGELOG.md": the GitHub release notes are the body of CHANGELOG.md's `## <version>` section (heading excluded), extracted by `scripts/release-notes.sh` and passed with `--release-notes`. The release fails before publishing if the tag (without `v`) is not `Release` in `main.go` or the section is missing or empty. Why: a tag that disagrees with the built-in release would ship a binary whose `version` lies, and notes must never be silently empty.
 - **D3** [gap] issue #58: archives include README.md and CHANGELOG.md (agent-loop ships docs/GETTING-STARTED.md). The formula has no dependencies and a caveat that Claude Code (`claude`) must be installed and logged in. Why: Claude Code isn't a Homebrew formula dependency it can declare, and the handler fails without it.
 - **D4** [gap] plan D2 (#11): the release is cut by pushing the `vX.Y.Z` tag; the workflow publishes the GitHub release, so the README's manual `gh release create` step is removed. Building from source stays documented as the alternative to Homebrew.
+- **D5** [gap] issue #58: GoReleaser's `brews` (formula) section is used although GoReleaser v2.10+ marks it deprecated in favour of `homebrew_casks`, so `goreleaser check` exits non-zero with "configuration is valid, but uses deprecated properties", as in agent-loop (#124 D7). Why: the issue names a formula, a formula covers Linux, and the pinned GoReleaser version keeps it working.
+- **D6** [gap] issue #58: the GitHub release is titled `agent-loop-claude vX.Y.Z`, as the README's earlier manual `gh release create` step named it. Why: GoReleaser's default title is the bare tag.
 
 ## Verification
 
@@ -59,4 +61,7 @@ Adds a GoReleaser config and a tag-triggered release workflow, mirroring mayusuk
 
 ## Outcome
 
-_Filled in before shipping._
+- Added `.goreleaser.yaml`, `.github/workflows/release.yml` (same pinned SHAs and GoReleaser v2.20.3 as agent-loop), `scripts/release-notes.sh` with `TestI12_4_ReleaseNotes*` tests, a README/config test, `dist/` in `.gitignore`, and the README's Homebrew install and tag-driven releasing sections.
+- Deviation from agent-loop: one pure-Go build on `ubuntu-latest` instead of a macOS runner with cgo (D1).
+- Local results: `goreleaser check` reports only the `brews` deprecation (D5). `release --snapshot --clean` built four archives, `checksums.txt` and `dist/homebrew/Formula/agent-loop-claude.rb` (Ruby syntax OK); the darwin arm64 binary prints `agent-loop-claude 0.0.0-SNAPSHOT-<sha>`. The real release path (tag push, tap commit) is not exercised here.
+- No tags pushed and no releases created. No follow-up issues filed.

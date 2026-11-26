@@ -109,3 +109,25 @@ func TestI12_4_ReleaseNotesRefuseABadRelease(t *testing.T) {
 		})
 	}
 }
+
+// TestI12_4_ReadmeInstallsWithHomebrew: the README installs the formula the
+// release workflow writes to mayusuk/homebrew-tap (issue #58), and
+// .goreleaser.yaml writes that formula with the version set from the tag.
+func TestI12_4_ReadmeInstallsWithHomebrew(t *testing.T) {
+	if readme := readRepoFile(t, "README.md"); !strings.Contains(readme, "brew install mayusuk/tap/agent-loop-claude\n") {
+		t.Error("README.md lacks brew install mayusuk/tap/agent-loop-claude")
+	}
+	cfg := readRepoFile(t, ".goreleaser.yaml")
+	for _, want := range []string{
+		"main: ./cmd/agent-loop-claude\n",
+		"-X main.version={{ .Version }}",
+		"  - name: agent-loop-claude\n",
+		"      owner: mayusuk\n      name: homebrew-tap\n      branch: main\n",
+		"token: \"{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}\"",
+		"directory: Formula\n",
+	} {
+		if !strings.Contains(cfg, want) {
+			t.Errorf(".goreleaser.yaml lacks %q", want)
+		}
+	}
+}
