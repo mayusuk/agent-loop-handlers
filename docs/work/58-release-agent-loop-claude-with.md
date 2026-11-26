@@ -29,7 +29,7 @@ Adds a GoReleaser config and a tag-triggered release workflow, mirroring mayusuk
 ## Steps
 
 - [x] Release notes script and its tests.
-- [ ] `.goreleaser.yaml`, `release.yml`, `.gitignore`; check with `goreleaser check` and `release --snapshot --clean`.
+- [x] `.goreleaser.yaml`, `release.yml`, `.gitignore`; check with `goreleaser check` and `release --snapshot --clean`.
 - [ ] README install and releasing sections.
 
 ## Acceptance criteria
